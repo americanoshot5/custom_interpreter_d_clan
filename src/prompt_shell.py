@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
-from common import Program, RuntimeValue, Token
+from common import LanguageError, Program, RuntimeValue, Token
 
 
 def is_balanced(text: str) -> bool:
@@ -39,3 +39,15 @@ def run_shell(
 
         if line.strip().lower() in {"exit", "quit"}:
             return
+        if line.strip() == "":
+            continue
+
+        try:
+            tokens = tokenize(line)
+            program = assemble(tokens)
+            check(program)
+            result = execute(program)
+        except LanguageError as error:
+            write_output(f"Error: {error}")
+        else:
+            write_output(str(result))
