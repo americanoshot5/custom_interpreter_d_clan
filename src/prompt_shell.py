@@ -31,19 +31,29 @@ def run_shell(
     prompt: str = ">>> ",
     continuation_prompt: str = "... ",
 ) -> None:
+    buffer: list[str] = []
+
     while True:
+        current_prompt = continuation_prompt if buffer else prompt
         try:
-            line = read_line(prompt)
+            line = read_line(current_prompt)
         except EOFError:
             return
 
-        if line.strip().lower() in {"exit", "quit"}:
-            return
-        if line.strip() == "":
+        if not buffer:
+            stripped = line.strip()
+            if stripped.lower() in {"exit", "quit"}:
+                return
+            if stripped == "":
+                continue
+
+        buffer.append(line)
+        text = "\n".join(buffer)
+        if not is_balanced(text):
             continue
 
         try:
-            tokens = tokenize(line)
+            tokens = tokenize(text)
             program = assemble(tokens)
             check(program)
             result = execute(program)
@@ -51,3 +61,5 @@ def run_shell(
             write_output(f"Error: {error}")
         else:
             write_output(str(result))
+
+        buffer = []

@@ -115,3 +115,32 @@ def test_blank_line_is_skipped_without_pipeline_call():
         execute=_unreachable,
     )
     assert outputs == []
+
+
+def test_multiline_expression_accumulates_until_balanced():
+    calls = {}
+
+    def fake_tokenize(source):
+        calls["tokenize"] = source
+        return ["TOKENS"]
+
+    def fake_assemble(tokens):
+        return "PROGRAM"
+
+    def fake_check(program):
+        pass
+
+    def fake_execute(program):
+        return 7.0
+
+    outputs = []
+    run_shell(
+        read_line=_scripted_read_line(["(+ 1", "(* 2 3))", "exit"]),
+        write_output=outputs.append,
+        tokenize=fake_tokenize,
+        assemble=fake_assemble,
+        check=fake_check,
+        execute=fake_execute,
+    )
+    assert outputs == ["7.0"]
+    assert calls["tokenize"] == "(+ 1\n(* 2 3))"
