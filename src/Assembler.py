@@ -10,6 +10,7 @@ from src.common import (
     ListExpr,
     LiteralExpr,
     Program,
+    Stmt,
     Token,
     TokenType,
 )
@@ -36,7 +37,12 @@ class SExpressionAssembler(Assembler):
             while not self._check(TokenType.RIGHT_PAREN):
                 if self._is_at_end():
                     raise AssembleError(f"Missing ')' for list opened at {token.location.line}:{token.location.column}")
-                elements.append(self._expression())
+                child = self._expression()
+                if isinstance(child, Stmt):
+                    loc = child.location
+                    loc_str = f"{loc.line}:{loc.column}" if loc is not None else "unknown"
+                    raise AssembleError(f"Statement cannot be used as expression at {loc_str}")
+                elements.append(child)
             self._consume(TokenType.RIGHT_PAREN, "Expected ')' after S-expression")
             return ListExpr(tuple(elements), location=token.location)
 

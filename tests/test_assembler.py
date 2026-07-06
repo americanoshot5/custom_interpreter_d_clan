@@ -711,3 +711,77 @@ def test_check_eof_type_at_eof_returns_false(asm):
     asm._tokens = [eof()]
     asm._current = 0
     assert asm._check(TokenType.EOF) is False
+
+
+# ============================================================
+# 16. Expr 가 Stmt 를 child 로 가질 수 없다는 방어 코드
+# ============================================================
+
+def test_stmt_as_list_element_raises(mocker):
+    """_expression() 이 Stmt 를 반환할 경우 AssembleError 가 발생해야 한다."""
+    from src.common import ExpressionStmt, IdentifierExpr
+
+    fake_stmt = ExpressionStmt(IdentifierExpr("x", location=loc(3, 7)), location=loc(3, 7))
+
+    call_count = 0
+    original = SExpressionAssembler._expression
+
+    def patched(self_):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return original(self_)  # '(' 처리는 정상 실행
+        return fake_stmt           # 두 번째 호출: Stmt 반환
+
+    mocker.patch.object(SExpressionAssembler, "_expression", patched)
+
+    tokens = [lparen(), ident("a"), rparen(), eof()]
+    with pytest.raises(AssembleError, match="3:7"):
+        SExpressionAssembler(tokens).assemble()
+
+
+def test_stmt_as_list_element_error_message_contains_stmt_location(mocker):
+    """에러 메시지에 Stmt 의 위치(line:col)가 포함되어야 한다."""
+    from src.common import ExpressionStmt, IdentifierExpr
+
+    fake_stmt = ExpressionStmt(IdentifierExpr("y", location=loc(5, 2)), location=loc(5, 2))
+
+    original = SExpressionAssembler._expression
+    call_count = 0
+
+    def patched(self_):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return original(self_)
+        return fake_stmt
+
+    mocker.patch.object(SExpressionAssembler, "_expression", patched)
+
+    tokens = [lparen(), ident("b"), rparen(), eof()]
+    with pytest.raises(AssembleError, match="Statement cannot be used as expression"):
+        SExpressionAssembler(tokens).assemble()
+
+
+def test_stmt_with_none_location_as_list_element_raises(mocker):
+    """Stmt 의 location 이 None 이어도 AssembleError 가 발생하고
+    에러 메시지에 'unknown' 이 포함되어야 한다."""
+    from src.common import ExpressionStmt, IdentifierExpr
+
+    fake_stmt = ExpressionStmt(IdentifierExpr("z"), location=None)
+
+    original = SExpressionAssembler._expression
+    call_count = 0
+
+    def patched(self_):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return original(self_)
+        return fake_stmt
+
+    mocker.patch.object(SExpressionAssembler, "_expression", patched)
+
+    tokens = [lparen(), ident("c"), rparen(), eof()]
+    with pytest.raises(AssembleError, match="unknown"):
+        SExpressionAssembler(tokens).assemble()
