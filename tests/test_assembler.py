@@ -9,17 +9,14 @@ Mock 전략:
   - 내부 탐색 메서드(_peek, _advance 등)는 patch 로 교체 → _expression 로직을 독립적으로 검증
   - Assembler ABC 준수 여부는 isinstance 검사로 명시
 """
-
-from __future__ import annotations
-
-import pytest
-
 from src.common import (
     AssembleError,
     ExpressionStmt,
     IdentifierExpr,
     ListExpr,
     LiteralExpr,
+    Program,
+    SourceLocation,
     Token,
     TokenType,
 )
@@ -635,6 +632,82 @@ def test_module_assemble_delegates_to_SExpressionAssembler(mocker):
     tokens = [eof()]
     result = assemble(tokens)
 
-    MockClass.assert_called_once()
-    mock_instance.assemble.assert_called_once_with(tokens)
+    MockClass.assert_called_once_with(tokens)
+    mock_instance.assemble.assert_called_once_with()
     assert isinstance(result, Program)
+
+
+# ============================================================
+# 11. DefaultAssembler alias
+# ============================================================
+
+def test_default_assembler_is_sexpressionassembler():
+    from src.Assembler import DefaultAssembler
+    assert DefaultAssembler is SExpressionAssembler
+
+
+# ============================================================
+# 12. ExpressionStmt 의 location
+# ============================================================
+
+def test_expression_stmt_location_is_none():
+    """assemble() 은 ExpressionStmt 를 location 없이 생성한다."""
+    prog = SExpressionAssembler([num(1.0), eof()]).assemble()
+    assert prog.statements[0].location is None
+
+
+# ============================================================
+# 13. assemble() 재사용 — 동일 인스턴스 두 번 호출
+# ============================================================
+
+def test_assemble_second_call_returns_empty_program():
+    """assemble() 후 _current 가 EOF 에 도달해 있으므로
+    같은 인스턴스를 재사용하면 두 번째 호출은 빈 Program 을 반환한다."""
+    asm = SExpressionAssembler([num(1.0), eof()])
+    first = asm.assemble()
+    second = asm.assemble()
+    assert len(first.statements) == 1
+    assert second.statements == ()
+
+
+# ============================================================
+# 14. 중첩 괄호 에러 위치 — 어느 ( 의 위치가 메시지에 나오는가
+# ============================================================
+
+def test_inner_unclosed_paren_error_reports_inner_location():
+    """안쪽 ( 가 닫히지 않았을 때 에러 위치는 안쪽 ( 이어야 한다."""
+    tokens = [
+        lparen(line=1, col=1),
+        ident("a"),
+        lparen(line=1, col=5),  # 이 괄호가 닫히지 않음
+        ident("b"),
+        eof(),
+    ]
+    with pytest.raises(AssembleError, match="1:5"):
+        SExpressionAssembler(tokens).assemble()
+
+
+def test_outer_unclosed_paren_with_closed_inner_reports_outer_location():
+    """안쪽 리스트는 닫혔지만 바깥쪽 ( 가 닫히지 않았을 때
+    에러 위치는 바깥쪽 ( 이어야 한다."""
+    tokens = [
+        lparen(line=2, col=3),  # 이 괄호가 닫히지 않음
+        ident("foo"),
+        lparen(), ident("bar"), rparen(),  # 안쪽은 정상적으로 닫힘
+        eof(),
+    ]
+    with pytest.raises(AssembleError, match="2:3"):
+        SExpressionAssembler(tokens).assemble()
+
+
+# ============================================================
+# 15. _check(TokenType.EOF) — EOF 위치에서 EOF 타입 체크도 False
+# ============================================================
+
+def test_check_eof_type_at_eof_returns_false(asm):
+    """`_check()` 는 `_is_at_end()` 가 True 이면 어떤 타입이든 False 를 반환한다.
+    EOF 토큰이 있어도 _check(TokenType.EOF) 는 False 이므로
+    EOF 감지에는 반드시 _is_at_end() 를 사용해야 한다."""
+    asm._tokens = [eof()]
+    asm._current = 0
+    assert asm._check(TokenType.EOF) is False
