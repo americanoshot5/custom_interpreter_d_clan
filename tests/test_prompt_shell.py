@@ -72,7 +72,7 @@ def test_single_line_success_prints_result():
 
     outputs = []
     run_shell(
-        read_line=_scripted_read_line(["(+ 1 2)", "exit"]),
+        read_line=_scripted_read_line(["(+ 1 2)", "", "exit"]),
         write_output=outputs.append,
         tokenize=fake_tokenize,
         assemble=fake_assemble,
@@ -94,7 +94,7 @@ def test_pipeline_error_is_reported_and_loop_continues():
 
     outputs = []
     run_shell(
-        read_line=_scripted_read_line(["bad input", "exit"]),
+        read_line=_scripted_read_line(["bad input", "", "exit"]),
         write_output=outputs.append,
         tokenize=fake_tokenize,
         assemble=_unreachable,
@@ -117,7 +117,27 @@ def test_blank_line_is_skipped_without_pipeline_call():
     assert outputs == []
 
 
-def test_multiline_expression_accumulates_until_balanced():
+def test_balanced_expression_waits_for_blank_line_before_dispatch():
+    calls = []
+
+    def fake_tokenize(source):
+        calls.append(source)
+        return ["TOKENS"]
+
+    outputs = []
+    run_shell(
+        read_line=_scripted_read_line(["(+ 1 2)", "exit"]),
+        write_output=outputs.append,
+        tokenize=fake_tokenize,
+        assemble=lambda tokens: "PROGRAM",
+        check=lambda program: None,
+        execute=lambda program: 3.0,
+    )
+    assert outputs == []
+    assert calls == []
+
+
+def test_multiline_expression_submits_on_blank_line():
     calls = {}
 
     def fake_tokenize(source):
@@ -135,7 +155,7 @@ def test_multiline_expression_accumulates_until_balanced():
 
     outputs = []
     run_shell(
-        read_line=_scripted_read_line(["(+ 1", "(* 2 3))", "exit"]),
+        read_line=_scripted_read_line(["(+ 1", "(* 2 3))", "", "exit"]),
         write_output=outputs.append,
         tokenize=fake_tokenize,
         assemble=fake_assemble,
@@ -144,6 +164,26 @@ def test_multiline_expression_accumulates_until_balanced():
     )
     assert outputs == ["7.0"]
     assert calls["tokenize"] == "(+ 1\n(* 2 3))"
+
+
+def test_multiple_top_level_expressions_submit_together_on_blank_line():
+    calls = {}
+
+    def fake_tokenize(source):
+        calls["tokenize"] = source
+        return ["TOKENS"]
+
+    outputs = []
+    run_shell(
+        read_line=_scripted_read_line(['(print "hello")', "(+ 1 2)", "", "exit"]),
+        write_output=outputs.append,
+        tokenize=fake_tokenize,
+        assemble=lambda tokens: "PROGRAM",
+        check=lambda program: None,
+        execute=lambda program: 3.0,
+    )
+    assert outputs == ["3.0"]
+    assert calls["tokenize"] == '(print "hello")\n(+ 1 2)'
 
 
 def test_main_wires_run_shell_with_real_pipeline_functions(monkeypatch):

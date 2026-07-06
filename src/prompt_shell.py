@@ -51,22 +51,22 @@ def run_shell(
             if stripped == "":
                 continue
 
-        buffer.append(line)
-        text = "\n".join(buffer)
-        if not is_balanced(text):
+        if line.strip() == "":
+            text = "\n".join(buffer)
+            try:
+                tokens = tokenize(text)
+                program = assemble(tokens)
+                check(program)
+                result = execute(program)
+            except LanguageError as error:
+                write_output(f"Error: {error}")
+            else:
+                write_output(str(result))
+
+            buffer = []
             continue
 
-        try:
-            tokens = tokenize(text)
-            program = assemble(tokens)
-            check(program)
-            result = execute(program)
-        except LanguageError as error:
-            write_output(f"Error: {error}")
-        else:
-            write_output(str(result))
-
-        buffer = []
+        buffer.append(line)
 
 
 def main() -> None:
