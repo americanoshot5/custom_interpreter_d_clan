@@ -3,22 +3,64 @@ from common import *
 from interfaces import *
 
 class SExpressionExecutor(Executor):
-    def execute(self, program: Program):
+    def execute(self, program: Program) -> RuntimeValue:
         result = None
+
         for stmt in program.statements:
             result = self._execute_stmt(stmt)
+
         return result
 
-    def _execute_stmt(self, stmt):
+    def _execute_stmt(self, stmt: Stmt) -> RuntimeValue:
         if isinstance(stmt, ExpressionStmt):
-            return self._evaluate(stmt.expression)
-        raise ExecuteError("Unsupported statement")
+            return self._calculate_expr(stmt.expression)
 
-    def _evaluate(self, expr):
+        raise ExecuteError(f"Unsupported statement: {type(stmt).__name__}")
+
+    def _calculate_expr(self, expr: Expr) -> RuntimeValue:
         if isinstance(expr, LiteralExpr):
             return expr.value
 
-        raise ExecuteError("Unsupported expression")
+        if isinstance(expr, IdentifierExpr):
+            return expr.name
+
+        if isinstance(expr, ListExpr):
+            return self._calculate_list_expr(expr)
+
+        raise ExecuteError(f"Unsupported expression: {type(expr).__name__}")
+
+    def _calculate_list_expr(self, expr: ListExpr) -> RuntimeValue:
+        if not expr.elements:
+            raise ExecuteError("Empty s-expression")
+
+        operator_name = self._calculate_expr(expr.elements[0])
+        operands = [self._calculate_expr(arg) for arg in expr.elements[1:]]
+
+        match operator_name:
+            case "+":
+                if len(operands) == 1:
+                    return operands[0]
+                return operands[0] + operands[1]
+
+            case "-":
+                if len(operands) == 1:
+                    return -operands[0]
+                return operands[0] - operands[1]
+
+            case "*":
+                if len(operands) == 1:
+                    raise ExecuteError("'*' expects exactly two operands")
+                return operands[0] * operands[1]
+
+            case "/":
+                if len(operands) == 1:
+                    raise ExecuteError("'/' expects exactly two operands")
+                if operands[1] == 0:
+                    raise ZeroDivisionError("Division by zero")
+                return operands[0] / operands[1]
+
+            case _:
+                raise ExecuteError(f"Unsupported operator")
 
 
 DefaultExecutor = SExpressionExecutor
