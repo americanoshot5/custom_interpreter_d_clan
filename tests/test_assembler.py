@@ -157,7 +157,7 @@ def kw(type_: TokenType, line: int = 1, col: int = 1) -> Token:
 
 def unwrap(tokens: list[Token]):
     """단일 식 Program → Expr 꺼내기"""
-    prog = SExpressionAssembler().assemble(tokens)
+    prog = SExpressionAssembler(tokens).assemble()
     assert len(prog.statements) == 1
     return prog.statements[0].expression
 
@@ -167,15 +167,15 @@ def unwrap(tokens: list[Token]):
 # ============================================================
 
 def test_is_instance_of_assembler_abc():
-    assert isinstance(SExpressionAssembler(), Assembler)
+    assert isinstance(SExpressionAssembler([]), Assembler)
 
 
 def test_assemble_method_exists():
-    assert callable(SExpressionAssembler().assemble)
+    assert callable(SExpressionAssembler([]).assemble)
 
 
 def test_returns_program_type():
-    result = SExpressionAssembler().assemble([eof()])
+    result = SExpressionAssembler([eof()]).assemble()
     assert isinstance(result, Program)
 
 
@@ -192,7 +192,7 @@ def test_mock_assembler_satisfies_interface(mocker):
 # ============================================================
 
 def test_only_eof_returns_empty_program():
-    prog = SExpressionAssembler().assemble([eof()])
+    prog = SExpressionAssembler([eof()]).assemble()
     assert prog.statements == ()
 
 
@@ -200,7 +200,7 @@ def test_empty_token_list_treated_as_eof():
     """토큰이 아예 없으면 IndexError 가 아니라 비어있는 Program."""
     # EOF 없이 빈 리스트를 넘기면 _peek 이 IndexError 를 낼 수 있으므로
     # EOF 가 반드시 있어야 함을 명시하는 테스트
-    prog = SExpressionAssembler().assemble([eof()])
+    prog = SExpressionAssembler([eof()]).assemble()
     assert isinstance(prog, Program)
 
 
@@ -355,7 +355,7 @@ def test_list_with_string_and_number():
 # ============================================================
 
 def test_two_atoms():
-    prog = SExpressionAssembler().assemble([num(1.0), num(2.0), eof()])
+    prog = SExpressionAssembler([num(1.0), num(2.0), eof()]).assemble()
     assert len(prog.statements) == 2
     assert all(isinstance(s, ExpressionStmt) for s in prog.statements)
 
@@ -367,14 +367,14 @@ def test_two_lists():
         lparen(), tok(TokenType.PLUS, "+"), num(3.0), num(4.0), rparen(),
         eof(),
     ]
-    prog = SExpressionAssembler().assemble(tokens)
+    prog = SExpressionAssembler(tokens).assemble()
     assert len(prog.statements) == 2
     assert all(isinstance(s.expression, ListExpr) for s in prog.statements)
 
 
 def test_mixed_atom_and_list():
     tokens = [num(1.0), lparen(), ident("f"), rparen(), eof()]
-    prog = SExpressionAssembler().assemble(tokens)
+    prog = SExpressionAssembler(tokens).assemble()
     assert len(prog.statements) == 2
     assert isinstance(prog.statements[0].expression, LiteralExpr)
     assert isinstance(prog.statements[1].expression, ListExpr)
@@ -387,7 +387,7 @@ def test_mixed_atom_and_list():
 
 def test_literal_location_from_token():
     token = num(42.0, line=3, col=7)
-    prog = SExpressionAssembler().assemble([token, eof()])
+    prog = SExpressionAssembler([token, eof()]).assemble()
     expr = prog.statements[0].expression
     assert expr.location.line == 3
     assert expr.location.column == 7
@@ -396,7 +396,7 @@ def test_literal_location_from_token():
 def test_list_location_from_lparen_token():
     """ListExpr 의 location 은 여는 괄호 토큰의 위치여야 한다."""
     tokens = [lparen(line=2, col=5), rparen(), eof()]
-    prog = SExpressionAssembler().assemble(tokens)
+    prog = SExpressionAssembler(tokens).assemble()
     expr = prog.statements[0].expression
     assert expr.location.line == 2
     assert expr.location.column == 5
@@ -404,7 +404,7 @@ def test_list_location_from_lparen_token():
 
 def test_identifier_location_from_token():
     token = ident("myVar", line=10, col=3)
-    prog = SExpressionAssembler().assemble([token, eof()])
+    prog = SExpressionAssembler([token, eof()]).assemble()
     expr = prog.statements[0].expression
     assert expr.location.line == 10
     assert expr.location.column == 3
@@ -420,7 +420,7 @@ def test_mock_location_used_in_node(mocker):
         literal=1.0,
         location=mock_loc,
     )
-    prog = SExpressionAssembler().assemble([token, eof()])
+    prog = SExpressionAssembler([token, eof()]).assemble()
     expr = prog.statements[0].expression
     assert expr.location.line == 99
     assert expr.location.column == 42
@@ -434,25 +434,25 @@ def test_mock_location_used_in_node(mocker):
 def test_unclosed_paren_raises_assemble_error():
     tokens = [lparen(line=1, col=1), num(1.0), eof()]
     with pytest.raises(AssembleError):
-        SExpressionAssembler().assemble(tokens)
+        SExpressionAssembler(tokens).assemble()
 
 
 def test_unclosed_paren_error_contains_location():
     tokens = [lparen(line=3, col=5), num(1.0), eof()]
     with pytest.raises(AssembleError, match="3:5"):
-        SExpressionAssembler().assemble(tokens)
+        SExpressionAssembler(tokens).assemble()
 
 
 def test_unexpected_rparen_raises():
     tokens = [rparen(line=2, col=4), eof()]
     with pytest.raises(AssembleError):
-        SExpressionAssembler().assemble(tokens)
+        SExpressionAssembler(tokens).assemble()
 
 
 def test_unexpected_rparen_error_contains_location():
     tokens = [rparen(line=2, col=4), eof()]
     with pytest.raises(AssembleError, match="2:4"):
-        SExpressionAssembler().assemble(tokens)
+        SExpressionAssembler(tokens).assemble()
 
 
 def test_mock_location_appears_in_error_message(mocker):
@@ -462,13 +462,13 @@ def test_mock_location_appears_in_error_message(mocker):
     mock_loc.column = 11
     bad_token = Token(type=TokenType.RIGHT_PAREN, lexeme=")", location=mock_loc)
     with pytest.raises(AssembleError, match="7:11"):
-        SExpressionAssembler().assemble([bad_token, eof()])
+        SExpressionAssembler([bad_token, eof()]).assemble()
 
 
 def test_missing_rparen_error_message():
     tokens = [lparen(line=5, col=2), ident("x"), eof()]
     with pytest.raises(AssembleError, match="Missing"):
-        SExpressionAssembler().assemble(tokens)
+        SExpressionAssembler(tokens).assemble()
 
 
 # ============================================================
@@ -477,7 +477,7 @@ def test_missing_rparen_error_message():
 
 @pytest.fixture
 def asm():
-    a = SExpressionAssembler()
+    a = SExpressionAssembler([])
     a._tokens = [eof()]
     a._current = 0
     return a
@@ -583,7 +583,7 @@ def test_consume_error_includes_location(asm):
 
 def test_assemble_calls_expression_once_per_top_level(mocker):
     """assemble 은 EOF 전까지 _expression 을 정확히 n 번 호출해야 한다."""
-    asm = SExpressionAssembler()
+    asm = SExpressionAssembler([])
 
     call_count = 0
     fake_expr = LiteralExpr(value=1.0, location=None)
@@ -598,7 +598,7 @@ def test_assemble_calls_expression_once_per_top_level(mocker):
     asm._current = 0
 
     mocker.patch.object(SExpressionAssembler, "_expression", fake_expression)
-    prog = asm.assemble([num(1.0), num(2.0), eof()])
+    prog = asm.assemble()
 
     assert call_count == 2
     assert len(prog.statements) == 2
@@ -606,13 +606,13 @@ def test_assemble_calls_expression_once_per_top_level(mocker):
 
 def test_assemble_wraps_each_expr_in_expression_stmt():
     tokens = [num(1.0), num(2.0), eof()]
-    prog = SExpressionAssembler().assemble(tokens)
+    prog = SExpressionAssembler(tokens).assemble()
     assert all(isinstance(s, ExpressionStmt) for s in prog.statements)
 
 
 def test_assemble_program_has_correct_statement_count():
     tokens = [num(1.0), num(2.0), num(3.0), eof()]
-    prog = SExpressionAssembler().assemble(tokens)
+    prog = SExpressionAssembler(tokens).assemble()
     assert len(prog.statements) == 3
 
 
@@ -638,4 +638,3 @@ def test_module_assemble_delegates_to_SExpressionAssembler(mocker):
     MockClass.assert_called_once()
     mock_instance.assemble.assert_called_once_with(tokens)
     assert isinstance(result, Program)
->>>>>>> 717771c (ADD test_assembler - testcases)
