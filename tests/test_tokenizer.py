@@ -9,7 +9,7 @@ def test_tokenize_simple_expression():
     types = [t.type for t in tokens]
     assert types == [
         TokenType.LEFT_PAREN,
-        TokenType.IDENTIFIER,
+        TokenType.PLUS,
         TokenType.NUMBER,
         TokenType.NUMBER,
         TokenType.RIGHT_PAREN,

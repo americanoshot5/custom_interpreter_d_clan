@@ -19,7 +19,7 @@ def _token(token_type, lexeme, literal=None):
 def _plus_expr_tokens():
     return [
         _token(TokenType.LEFT_PAREN, "("),
-        _token(TokenType.IDENTIFIER, "+"),
+        _token(TokenType.PLUS, "+"),
         _token(TokenType.NUMBER, "1", 1.0),
         _token(TokenType.NUMBER, "2", 2.0),
         _token(TokenType.RIGHT_PAREN, ")"),
@@ -52,10 +52,10 @@ def test_assemble_list_expression():
 def test_assemble_nested_list_expression():
     tokens = [
         _token(TokenType.LEFT_PAREN, "("),
-        _token(TokenType.IDENTIFIER, "+"),
+        _token(TokenType.PLUS, "+"),
         _token(TokenType.NUMBER, "1", 1.0),
         _token(TokenType.LEFT_PAREN, "("),
-        _token(TokenType.IDENTIFIER, "*"),
+        _token(TokenType.STAR, "*"),
         _token(TokenType.NUMBER, "2", 2.0),
         _token(TokenType.NUMBER, "3", 3.0),
         _token(TokenType.RIGHT_PAREN, ")"),
@@ -78,7 +78,7 @@ def test_assemble_nested_list_expression():
 def test_assemble_missing_closing_paren_raises():
     tokens = [
         _token(TokenType.LEFT_PAREN, "("),
-        _token(TokenType.IDENTIFIER, "+"),
+        _token(TokenType.PLUS, "+"),
         _token(TokenType.NUMBER, "1", 1.0),
         _token(TokenType.EOF, ""),
     ]
