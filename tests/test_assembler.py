@@ -823,3 +823,96 @@ def test_program_statements_are_all_stmt_instances():
     tokens = [num(1.0), ident("foo"), lparen(), num(2.0), rparen(), eof()]
     prog = SExpressionAssembler(tokens).assemble()
     assert all(isinstance(s, Stmt) for s in prog.statements)
+
+
+# ============================================================
+# 18. 복합 식 통합 테스트
+#     (if (> x 0) (set! y 1)) 를 수동으로 토큰화한 시퀀스로
+#     어셈블러가 올바른 중첩 트리를 구성하는지 검증
+# ============================================================
+
+def test_complex_if_expression_tree_structure():
+    """
+    입력:  (if (> x 0) (set! y 1))
+    토큰:  ( if ( > x 0 ) ( set! y 1 ) )
+
+    기대 트리:
+      ExpressionStmt
+      └── ListExpr                     (if ...)
+            ├── IdentifierExpr("if")
+            ├── ListExpr               (> x 0)
+            │     ├── IdentifierExpr(">")
+            │     ├── IdentifierExpr("x")
+            │     └── LiteralExpr(0.0)
+            └── ListExpr               (set! y 1)
+                  ├── IdentifierExpr("set!")
+                  ├── IdentifierExpr("y")
+                  └── LiteralExpr(1.0)
+    """
+    tokens = [
+        lparen(),
+        kw(TokenType.IF),                       # if  → IdentifierExpr (keyword fallthrough)
+        lparen(), tok(TokenType.GREATER, ">"), ident("x"), num(0.0), rparen(),
+        lparen(), ident("set!"), ident("y"), num(1.0), rparen(),
+        rparen(),
+        eof(),
+    ]
+
+    prog = SExpressionAssembler(tokens).assemble()
+
+    # 루트: ExpressionStmt 하나
+    assert len(prog.statements) == 1
+    stmt = prog.statements[0]
+    assert isinstance(stmt, ExpressionStmt)
+
+    # 최상위 리스트: (if cond body)
+    outer = stmt.expression
+    assert isinstance(outer, ListExpr)
+    assert len(outer.elements) == 3
+
+    head, cond, body = outer.elements
+
+    # head: IdentifierExpr("if")
+    assert isinstance(head, IdentifierExpr)
+    assert head.name == "if"
+
+    # cond: (> x 0)
+    assert isinstance(cond, ListExpr)
+    assert len(cond.elements) == 3
+    cond_op, cond_lhs, cond_rhs = cond.elements
+    assert isinstance(cond_op, IdentifierExpr) and cond_op.name == ">"
+    assert isinstance(cond_lhs, IdentifierExpr) and cond_lhs.name == "x"
+    assert isinstance(cond_rhs, LiteralExpr) and cond_rhs.value == 0.0
+
+    # body: (set! y 1)
+    assert isinstance(body, ListExpr)
+    assert len(body.elements) == 3
+    body_op, body_lhs, body_rhs = body.elements
+    assert isinstance(body_op, IdentifierExpr) and body_op.name == "set!"
+    assert isinstance(body_lhs, IdentifierExpr) and body_lhs.name == "y"
+    assert isinstance(body_rhs, LiteralExpr) and body_rhs.value == 1.0
+
+
+def test_complex_if_expression_no_stmt_in_tree():
+    """트리의 모든 Expr 노드는 Stmt 를 포함하지 않아야 한다."""
+    from src.common import Stmt
+    tokens = [
+        lparen(),
+        kw(TokenType.IF),
+        lparen(), tok(TokenType.GREATER, ">"), ident("x"), num(0.0), rparen(),
+        lparen(), ident("set!"), ident("y"), num(1.0), rparen(),
+        rparen(),
+        eof(),
+    ]
+
+    prog = SExpressionAssembler(tokens).assemble()
+    outer = prog.statements[0].expression
+
+    def collect_exprs(node):
+        yield node
+        if isinstance(node, ListExpr):
+            for child in node.elements:
+                yield from collect_exprs(child)
+
+    for expr_node in collect_exprs(outer):
+        assert not isinstance(expr_node, Stmt)
