@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from common import (
+from src.common import (
     AssembleError,
     Expr,
     ExpressionStmt,
@@ -13,7 +13,7 @@ from common import (
     Token,
     TokenType,
 )
-from interfaces import Assembler
+from src.interfaces import Assembler
 
 
 class SExpressionAssembler(Assembler):
