@@ -144,3 +144,26 @@ def test_multiline_expression_accumulates_until_balanced():
     )
     assert outputs == ["7.0"]
     assert calls["tokenize"] == "(+ 1\n(* 2 3))"
+
+
+def test_main_wires_run_shell_with_real_pipeline_functions(monkeypatch):
+    import prompt_shell
+    from Assembler import assemble
+    from Checker import check
+    from Executor import execute
+    from Tokenizer import tokenize
+
+    captured = {}
+
+    def fake_run_shell(**kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(prompt_shell, "run_shell", fake_run_shell)
+    prompt_shell.main()
+
+    assert captured["read_line"] is input
+    assert captured["write_output"] is print
+    assert captured["tokenize"] is tokenize
+    assert captured["assemble"] is assemble
+    assert captured["check"] is check
+    assert captured["execute"] is execute

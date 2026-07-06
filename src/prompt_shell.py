@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
+from Assembler import assemble
+from Checker import check
 from common import LanguageError, Program, RuntimeValue, Token
+from Executor import execute
+from Tokenizer import tokenize
 
 
 def is_balanced(text: str) -> bool:
@@ -63,3 +67,18 @@ def run_shell(
             write_output(str(result))
 
         buffer = []
+
+
+def main() -> None:
+    run_shell(
+        read_line=input,
+        write_output=print,
+        tokenize=tokenize,
+        assemble=assemble,
+        check=check,
+        execute=execute,
+    )
+
+
+if __name__ == "__main__":
+    main()
