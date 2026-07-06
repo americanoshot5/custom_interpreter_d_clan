@@ -60,6 +60,24 @@ def test_calculate_simple_division():
     )
     assert execute(program) == 2.0
 
+def test_calculate_simple_less_than():
+    program = Program(
+        (ExpressionStmt(ListExpr((IdentifierExpr("<"), LiteralExpr(6), LiteralExpr(3)))),)
+    )
+    assert execute(program) == False
+
+def test_calculate_simple_greater_than():
+    program = Program(
+        (ExpressionStmt(ListExpr((IdentifierExpr(">"), LiteralExpr(6), LiteralExpr(5)))),)
+    )
+    assert execute(program) == True
+
+def test_calculate_simple_not():
+    program = Program(
+        (ExpressionStmt(ListExpr((IdentifierExpr("!"), LiteralExpr(True)))),)
+    )
+    assert execute(program) == False
+
 def test_calculate_nested_arithmetic1():
     inner = ListExpr((IdentifierExpr("*"), LiteralExpr(2), LiteralExpr(3)))
     program = Program(

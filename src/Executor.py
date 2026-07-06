@@ -14,6 +14,16 @@ class SExpressionExecutor(Executor):
     def _execute_stmt(self, stmt: Stmt) -> RuntimeValue:
         if isinstance(stmt, ExpressionStmt):
             return self._calculate_expr(stmt.expression)
+        if isinstance(stmt, PrintStmt):
+            ...
+        if isinstance(stmt, VarStmt):
+            ...
+        if isinstance(stmt, IfStmt):
+            ...
+        if isinstance(stmt, ForStmt):
+            ...
+        if isinstance(stmt, BlockStmt):
+            ...
 
         raise ExecuteError(f"Unsupported statement: {type(stmt).__name__}")
 
@@ -33,31 +43,38 @@ class SExpressionExecutor(Executor):
         if not expr.elements:
             raise ExecuteError("Empty s-expression")
 
-        operator_name = self._calculate_expr(expr.elements[0])
+        operator = self._calculate_expr(expr.elements[0])
         operands = [self._calculate_expr(arg) for arg in expr.elements[1:]]
 
-        match operator_name:
+        match operator:
             case "+":
-                if len(operands) == 1:
-                    return operands[0]
+                if len(operands) == 1:  return operands[0]
                 return operands[0] + operands[1]
 
             case "-":
-                if len(operands) == 1:
-                    return -operands[0]
+                if len(operands) == 1:  return -operands[0]
                 return operands[0] - operands[1]
 
             case "*":
-                if len(operands) == 1:
-                    raise ExecuteError("'*' expects exactly two operands")
+                if len(operands) == 1:  raise ExecuteError("'*' expects exactly two operands")
                 return operands[0] * operands[1]
 
             case "/":
-                if len(operands) == 1:
-                    raise ExecuteError("'/' expects exactly two operands")
-                if operands[1] == 0:
-                    raise ZeroDivisionError("Division by zero")
+                if len(operands) == 1:  raise ExecuteError("'/' expects exactly two operands")
+                if operands[1] == 0:    raise ZeroDivisionError("Division by zero")
                 return operands[0] / operands[1]
+
+            case "<":
+                if len(operands) == 1:  raise ExecuteError("'<' expects exactly two operands")
+                return operands[0] < operands[1]
+
+            case ">":
+                if len(operands) == 1:  raise ExecuteError("'>' expects exactly two operands")
+                return operands[0] > operands[1]
+
+            case "!":
+                if len(operands) == 2: raise ExecuteError("'!' expects exactly one operand")
+                return not operands[0]
 
             case _:
                 raise ExecuteError(f"Unsupported operator")
