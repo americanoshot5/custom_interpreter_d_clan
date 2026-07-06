@@ -785,3 +785,45 @@ def test_stmt_with_none_location_as_list_element_raises(mocker):
     tokens = [lparen(), ident("c"), rparen(), eof()]
     with pytest.raises(AssembleError, match="unknown"):
         SExpressionAssembler(tokens).assemble()
+
+
+# ============================================================
+# 17. 트리 루트는 항상 Stmt — assemble() 레벨 방어 코드
+# ============================================================
+
+def test_top_level_stmt_from_expression_raises(mocker):
+    """최상위에서 _expression() 이 Stmt 를 반환하면 AssembleError 가 발생해야 한다."""
+    fake_stmt = ExpressionStmt(IdentifierExpr("x", location=loc(2, 4)), location=loc(2, 4))
+
+    mocker.patch.object(SExpressionAssembler, "_expression", return_value=fake_stmt)
+
+    with pytest.raises(AssembleError, match="2:4"):
+        SExpressionAssembler([num(1.0), eof()]).assemble()
+
+
+def test_top_level_stmt_error_message(mocker):
+    """에러 메시지에 'Statement cannot be used as expression' 이 포함되어야 한다."""
+    fake_stmt = ExpressionStmt(IdentifierExpr("x", location=loc(1, 1)), location=loc(1, 1))
+
+    mocker.patch.object(SExpressionAssembler, "_expression", return_value=fake_stmt)
+
+    with pytest.raises(AssembleError, match="Statement cannot be used as expression"):
+        SExpressionAssembler([num(1.0), eof()]).assemble()
+
+
+def test_top_level_stmt_with_none_location_raises(mocker):
+    """최상위 Stmt 의 location 이 None 이어도 에러 메시지에 'unknown' 이 포함된다."""
+    fake_stmt = ExpressionStmt(IdentifierExpr("x"), location=None)
+
+    mocker.patch.object(SExpressionAssembler, "_expression", return_value=fake_stmt)
+
+    with pytest.raises(AssembleError, match="unknown"):
+        SExpressionAssembler([num(1.0), eof()]).assemble()
+
+
+def test_program_statements_are_all_stmt_instances():
+    """assemble() 이 반환하는 Program.statements 의 모든 요소는 Stmt 여야 한다."""
+    from src.common import Stmt
+    tokens = [num(1.0), ident("foo"), lparen(), num(2.0), rparen(), eof()]
+    prog = SExpressionAssembler(tokens).assemble()
+    assert all(isinstance(s, Stmt) for s in prog.statements)

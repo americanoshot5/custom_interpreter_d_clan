@@ -25,7 +25,12 @@ class SExpressionAssembler(Assembler):
     def assemble(self) -> Program:
         statements: list[ExpressionStmt] = []
         while not self._is_at_end():
-            statements.append(ExpressionStmt(self._expression()))
+            expr = self._expression()
+            if isinstance(expr, Stmt):
+                loc = expr.location
+                loc_str = f"{loc.line}:{loc.column}" if loc is not None else "unknown"
+                raise AssembleError(f"Statement cannot be used as expression at {loc_str}")
+            statements.append(ExpressionStmt(expr))
 
         return Program(tuple(statements))
 
