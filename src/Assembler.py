@@ -2,8 +2,18 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from common import AssembleError, Program, Token
-from interfaces import Assembler
+from src.common import (
+    AssembleError,
+    Expr,
+    ExpressionStmt,
+    IdentifierExpr,
+    ListExpr,
+    LiteralExpr,
+    Program,
+    Token,
+    TokenType,
+)
+from src.interfaces import Assembler
 
 
 class SExpressionAssembler(Assembler):
