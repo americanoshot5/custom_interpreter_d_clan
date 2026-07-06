@@ -1,11 +1,12 @@
 import pytest
 
 from common import TokenType, TokenizeError
-from Tokenizer import tokenize
+from Tokenizer import SExpressionTokenizer
 
 
 def test_tokenize_simple_expression():
-    tokens = tokenize("(+ 1 2)")
+    src = SExpressionTokenizer("(+ 1 2)")
+    tokens = src.tokenize()
     types = [t.type for t in tokens]
 
 
@@ -22,14 +23,16 @@ def test_tokenize_simple_expression():
 
 
 def test_tokenize_string_literal():
-    tokens = tokenize('(print "hi")')
+    src = SExpressionTokenizer('(print "hi")')
+    tokens = src.tokenize()
     string_token = tokens[2]
     assert string_token.type == TokenType.STRING
     assert string_token.literal == "hi"
 
 
 def test_tokenize_boolean_keywords():
-    tokens = tokenize("true false")
+    src = SExpressionTokenizer("true false")
+    tokens = src.tokenize()
     assert tokens[0].type == TokenType.TRUE
     assert tokens[0].literal is True
     assert tokens[1].type == TokenType.FALSE
@@ -37,5 +40,6 @@ def test_tokenize_boolean_keywords():
 
 
 def test_tokenize_invalid_character_raises():
+    src = SExpressionTokenizer("@")
     with pytest.raises(TokenizeError):
-        tokenize("@")
+        src.tokenize()
