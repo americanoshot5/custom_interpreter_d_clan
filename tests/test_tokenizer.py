@@ -7,6 +7,8 @@ from Tokenizer import tokenize
 def test_tokenize_simple_expression():
     tokens = tokenize("(+ 1 2)")
     types = [t.type for t in tokens]
+
+
     assert types == [
         TokenType.LEFT_PAREN,
         TokenType.PLUS,
