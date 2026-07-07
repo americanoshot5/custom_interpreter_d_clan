@@ -14,16 +14,21 @@ import pytest
 
 from common import (
     AssembleError,
+    BlockStmt,
     ExpressionStmt,
+    ForStmt,
     IdentifierExpr,
+    IfStmt,
     ListExpr,
     LiteralExpr,
+    PrintStmt,
     Program,
     SourceLocation,
     Token,
     TokenType,
     Stmt,
-    CheckError
+    VarStmt,
+    CheckError,
 )
 from interfaces import Assembler
 from Assembler import SExpressionAssembler, assemble, DefaultAssembler
@@ -156,6 +161,14 @@ def kw(type_: TokenType, line: int = 1, col: int = 1) -> Token:
     # TRUE / FALSE 는 literal 값을 명시적으로 넣어야 LiteralExpr 에 전달된다
     literal = {TokenType.TRUE: True, TokenType.FALSE: False}.get(type_)
     return tok(type_, type_.value, literal=literal, line=line, col=col)
+
+
+def lbrace(line: int = 1, col: int = 1) -> Token:
+    return tok(TokenType.LEFT_BRACE, "{", line=line, col=col)
+
+
+def rbrace(line: int = 1, col: int = 1) -> Token:
+    return tok(TokenType.RIGHT_BRACE, "}", line=line, col=col)
 
 
 def unwrap(tokens: list[Token]):
@@ -717,19 +730,7 @@ def test_check_eof_type_at_eof_returns_false(asm):
 def test_stmt_as_list_element_raises(mocker):
     """_expression() 이 Stmt 를 반환할 경우 AssembleError 가 발생해야 한다."""
     fake_stmt = ExpressionStmt(IdentifierExpr("x", location=loc(3, 7)), location=loc(3, 7))
-
-    call_count = 0
-    original = SExpressionAssembler._expression
-
-    def patched(self_):
-        nonlocal call_count
-        call_count += 1
-        if call_count == 1:
-            return original(self_)  # '(' 처리는 정상 실행
-        return fake_stmt           # 두 번째 호출: Stmt 반환
-
-    mocker.patch.object(SExpressionAssembler, "_expression", patched)
-
+    mocker.patch.object(SExpressionAssembler, "_expression", return_value=fake_stmt)
     tokens = [lparen(), ident("a"), rparen(), eof()]
     with pytest.raises(AssembleError, match="3:7"):
         SExpressionAssembler(tokens).assemble()
@@ -738,19 +739,7 @@ def test_stmt_as_list_element_raises(mocker):
 def test_stmt_as_list_element_error_message_contains_stmt_location(mocker):
     """에러 메시지에 Stmt 의 위치(line:col)가 포함되어야 한다."""
     fake_stmt = ExpressionStmt(IdentifierExpr("y", location=loc(5, 2)), location=loc(5, 2))
-
-    original = SExpressionAssembler._expression
-    call_count = 0
-
-    def patched(self_):
-        nonlocal call_count
-        call_count += 1
-        if call_count == 1:
-            return original(self_)
-        return fake_stmt
-
-    mocker.patch.object(SExpressionAssembler, "_expression", patched)
-
+    mocker.patch.object(SExpressionAssembler, "_expression", return_value=fake_stmt)
     tokens = [lparen(), ident("b"), rparen(), eof()]
     with pytest.raises(AssembleError, match="Statement cannot be used as expression"):
         SExpressionAssembler(tokens).assemble()
@@ -760,19 +749,7 @@ def test_stmt_with_none_location_as_list_element_raises(mocker):
     """Stmt 의 location 이 None 이어도 AssembleError 가 발생하고
     에러 메시지에 'unknown' 이 포함되어야 한다."""
     fake_stmt = ExpressionStmt(IdentifierExpr("z"), location=None)
-
-    original = SExpressionAssembler._expression
-    call_count = 0
-
-    def patched(self_):
-        nonlocal call_count
-        call_count += 1
-        if call_count == 1:
-            return original(self_)
-        return fake_stmt
-
-    mocker.patch.object(SExpressionAssembler, "_expression", patched)
-
+    mocker.patch.object(SExpressionAssembler, "_expression", return_value=fake_stmt)
     tokens = [lparen(), ident("c"), rparen(), eof()]
     with pytest.raises(AssembleError, match="unknown"):
         SExpressionAssembler(tokens).assemble()
@@ -830,65 +807,11 @@ def test_complex_if_expression_tree_structure():
     입력:  (if (> x 0) (set! y 1))
     토큰:  ( if ( > x 0 ) ( set! y 1 ) )
 
-    기대 트리:
-      ExpressionStmt
-      └── ListExpr                     (if ...)
-            ├── IdentifierExpr("if")
-            ├── ListExpr               (> x 0)
-            │     ├── IdentifierExpr(">")
-            │     ├── IdentifierExpr("x")
-            │     └── LiteralExpr(0.0)
-            └── ListExpr               (set! y 1)
-                  ├── IdentifierExpr("set!")
-                  ├── IdentifierExpr("y")
-                  └── LiteralExpr(1.0)
+    기대 트리 (어셈블러가 if 키워드를 인식하므로 IfStmt 를 생성):
+      IfStmt
+      ├── condition: ListExpr(">", "x", 0.0)
+      └── then_branch: ExpressionStmt(ListExpr("set!", "y", 1.0))
     """
-    tokens = [
-        lparen(),
-        kw(TokenType.IF),                       # if  → IdentifierExpr (keyword fallthrough)
-        lparen(), tok(TokenType.GREATER, ">"), ident("x"), num(0.0), rparen(),
-        lparen(), ident("set!"), ident("y"), num(1.0), rparen(),
-        rparen(),
-        eof(),
-    ]
-
-    prog = SExpressionAssembler(tokens).assemble()
-
-    # 루트: ExpressionStmt 하나
-    assert len(prog.statements) == 1
-    stmt = prog.statements[0]
-    assert isinstance(stmt, ExpressionStmt)
-
-    # 최상위 리스트: (if cond body)
-    outer = stmt.expression
-    assert isinstance(outer, ListExpr)
-    assert len(outer.elements) == 3
-
-    head, cond, body = outer.elements
-
-    # head: IdentifierExpr("if")
-    assert isinstance(head, IdentifierExpr)
-    assert head.name == "if"
-
-    # cond: (> x 0)
-    assert isinstance(cond, ListExpr)
-    assert len(cond.elements) == 3
-    cond_op, cond_lhs, cond_rhs = cond.elements
-    assert isinstance(cond_op, IdentifierExpr) and cond_op.name == ">"
-    assert isinstance(cond_lhs, IdentifierExpr) and cond_lhs.name == "x"
-    assert isinstance(cond_rhs, LiteralExpr) and cond_rhs.value == 0.0
-
-    # body: (set! y 1)
-    assert isinstance(body, ListExpr)
-    assert len(body.elements) == 3
-    body_op, body_lhs, body_rhs = body.elements
-    assert isinstance(body_op, IdentifierExpr) and body_op.name == "set!"
-    assert isinstance(body_lhs, IdentifierExpr) and body_lhs.name == "y"
-    assert isinstance(body_rhs, LiteralExpr) and body_rhs.value == 1.0
-
-
-def test_complex_if_expression_no_stmt_in_tree():
-    """트리의 모든 Expr 노드는 Stmt 를 포함하지 않아야 한다."""
     tokens = [
         lparen(),
         kw(TokenType.IF),
@@ -899,7 +822,45 @@ def test_complex_if_expression_no_stmt_in_tree():
     ]
 
     prog = SExpressionAssembler(tokens).assemble()
-    outer = prog.statements[0].expression
+
+    assert len(prog.statements) == 1
+    stmt = prog.statements[0]
+    assert isinstance(stmt, IfStmt)
+    assert stmt.else_branch is None
+
+    # condition: (> x 0)
+    cond = stmt.condition
+    assert isinstance(cond, ListExpr)
+    cond_op, cond_lhs, cond_rhs = cond.elements
+    assert isinstance(cond_op, IdentifierExpr) and cond_op.name == ">"
+    assert isinstance(cond_lhs, IdentifierExpr) and cond_lhs.name == "x"
+    assert isinstance(cond_rhs, LiteralExpr) and cond_rhs.value == 0.0
+
+    # then_branch: ExpressionStmt((set! y 1))
+    then_branch = stmt.then_branch
+    assert isinstance(then_branch, ExpressionStmt)
+    body = then_branch.expression
+    assert isinstance(body, ListExpr)
+    body_op, body_lhs, body_rhs = body.elements
+    assert isinstance(body_op, IdentifierExpr) and body_op.name == "set!"
+    assert isinstance(body_lhs, IdentifierExpr) and body_lhs.name == "y"
+    assert isinstance(body_rhs, LiteralExpr) and body_rhs.value == 1.0
+
+
+def test_complex_if_expression_no_stmt_in_tree():
+    """IfStmt 의 condition 과 then_branch 의 ListExpr 안에 Stmt 가 없어야 한다."""
+    tokens = [
+        lparen(),
+        kw(TokenType.IF),
+        lparen(), tok(TokenType.GREATER, ">"), ident("x"), num(0.0), rparen(),
+        lparen(), ident("set!"), ident("y"), num(1.0), rparen(),
+        rparen(),
+        eof(),
+    ]
+
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, IfStmt)
 
     def collect_exprs(node):
         yield node
@@ -907,5 +868,241 @@ def test_complex_if_expression_no_stmt_in_tree():
             for child in node.elements:
                 yield from collect_exprs(child)
 
-    for expr_node in collect_exprs(outer):
+    for expr_node in collect_exprs(stmt.condition):
         assert not isinstance(expr_node, Stmt)
+
+    then_expr = stmt.then_branch.expression
+    for expr_node in collect_exprs(then_expr):
+        assert not isinstance(expr_node, Stmt)
+
+
+# ============================================================
+# 19. VarStmt
+# ============================================================
+
+def test_var_stmt_no_initializer():
+    """(var x) → VarStmt(name="x", initializer=None)"""
+    tokens = [lparen(), kw(TokenType.VAR), ident("x"), rparen(), eof()]
+    prog = SExpressionAssembler(tokens).assemble()
+    assert len(prog.statements) == 1
+    stmt = prog.statements[0]
+    assert isinstance(stmt, VarStmt)
+    assert stmt.name == "x"
+    assert stmt.initializer is None
+
+
+def test_var_stmt_with_literal_initializer():
+    """(var x 5) → VarStmt(name="x", initializer=LiteralExpr(5.0))"""
+    tokens = [lparen(), kw(TokenType.VAR), ident("x"), num(5.0), rparen(), eof()]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, VarStmt)
+    assert stmt.name == "x"
+    assert isinstance(stmt.initializer, LiteralExpr)
+    assert stmt.initializer.value == 5.0
+
+
+def test_var_stmt_with_expr_initializer():
+    """(var x (+ 1 2)) → VarStmt(name="x", initializer=ListExpr(...))"""
+    tokens = [
+        lparen(), kw(TokenType.VAR), ident("x"),
+        lparen(), tok(TokenType.PLUS, "+"), num(1.0), num(2.0), rparen(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, VarStmt)
+    assert stmt.name == "x"
+    assert isinstance(stmt.initializer, ListExpr)
+
+
+def test_var_stmt_location():
+    """VarStmt 의 location 은 여는 괄호 토큰 위치여야 한다."""
+    tokens = [lparen(line=3, col=7), kw(TokenType.VAR), ident("x"), rparen(), eof()]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert stmt.location.line == 3
+    assert stmt.location.column == 7
+
+
+def test_var_stmt_missing_name_raises():
+    """(var) — IDENTIFIER 없이 닫히면 AssembleError"""
+    tokens = [lparen(), kw(TokenType.VAR), rparen(), eof()]
+    with pytest.raises(AssembleError):
+        SExpressionAssembler(tokens).assemble()
+
+
+# ============================================================
+# 20. PrintStmt
+# ============================================================
+
+def test_print_stmt_with_literal():
+    """(print 42) → PrintStmt(expression=LiteralExpr(42.0))"""
+    tokens = [lparen(), kw(TokenType.PRINT), num(42.0), rparen(), eof()]
+    prog = SExpressionAssembler(tokens).assemble()
+    assert len(prog.statements) == 1
+    stmt = prog.statements[0]
+    assert isinstance(stmt, PrintStmt)
+    assert isinstance(stmt.expression, LiteralExpr)
+    assert stmt.expression.value == 42.0
+
+
+def test_print_stmt_with_identifier():
+    """(print x) → PrintStmt(expression=IdentifierExpr("x"))"""
+    tokens = [lparen(), kw(TokenType.PRINT), ident("x"), rparen(), eof()]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, PrintStmt)
+    assert isinstance(stmt.expression, IdentifierExpr)
+    assert stmt.expression.name == "x"
+
+
+def test_print_stmt_location():
+    tokens = [lparen(line=2, col=4), kw(TokenType.PRINT), num(1.0), rparen(), eof()]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert stmt.location.line == 2
+    assert stmt.location.column == 4
+
+
+# ============================================================
+# 21. IfStmt
+# ============================================================
+
+def test_if_stmt_no_else():
+    """(if x (print y)) → IfStmt(..., else_branch=None)"""
+    tokens = [
+        lparen(), kw(TokenType.IF),
+        ident("x"),
+        lparen(), kw(TokenType.PRINT), ident("y"), rparen(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, IfStmt)
+    assert isinstance(stmt.condition, IdentifierExpr)
+    assert stmt.condition.name == "x"
+    assert isinstance(stmt.then_branch, PrintStmt)
+    assert stmt.else_branch is None
+
+
+def test_if_stmt_with_else():
+    """(if x (print y) (print z)) → IfStmt(..., else_branch=PrintStmt(...))"""
+    tokens = [
+        lparen(), kw(TokenType.IF),
+        ident("x"),
+        lparen(), kw(TokenType.PRINT), ident("y"), rparen(),
+        lparen(), kw(TokenType.PRINT), ident("z"), rparen(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, IfStmt)
+    assert isinstance(stmt.else_branch, PrintStmt)
+    assert stmt.else_branch.expression.name == "z"
+
+
+def test_if_stmt_location():
+    tokens = [
+        lparen(line=4, col=1), kw(TokenType.IF),
+        ident("x"),
+        lparen(), kw(TokenType.PRINT), ident("y"), rparen(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert stmt.location.line == 4
+    assert stmt.location.column == 1
+
+
+# ============================================================
+# 22. ForStmt
+# ============================================================
+
+def test_for_stmt_basic():
+    """(for x 1 10 (print x)) → ForStmt(iterator="x", start=1.0, end=10.0, body=PrintStmt)"""
+    tokens = [
+        lparen(), kw(TokenType.FOR),
+        ident("x"), num(1.0), num(10.0),
+        lparen(), kw(TokenType.PRINT), ident("x"), rparen(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    assert len(prog.statements) == 1
+    stmt = prog.statements[0]
+    assert isinstance(stmt, ForStmt)
+    assert stmt.iterator == "x"
+    assert isinstance(stmt.start, LiteralExpr) and stmt.start.value == 1.0
+    assert isinstance(stmt.end, LiteralExpr) and stmt.end.value == 10.0
+    assert isinstance(stmt.body, PrintStmt)
+
+
+def test_for_stmt_location():
+    tokens = [
+        lparen(line=6, col=3), kw(TokenType.FOR),
+        ident("i"), num(0.0), num(5.0),
+        lparen(), kw(TokenType.PRINT), ident("i"), rparen(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert stmt.location.line == 6
+    assert stmt.location.column == 3
+
+
+def test_for_stmt_missing_iterator_raises():
+    """(for 1 10 (print x)) — IDENTIFIER 가 아닌 NUMBER 로 시작하면 AssembleError"""
+    tokens = [
+        lparen(), kw(TokenType.FOR),
+        num(1.0), num(10.0),
+        lparen(), kw(TokenType.PRINT), ident("x"), rparen(),
+        rparen(), eof(),
+    ]
+    with pytest.raises(AssembleError):
+        SExpressionAssembler(tokens).assemble()
+
+
+# ============================================================
+# 23. BlockStmt
+# ============================================================
+
+def test_block_stmt_empty():
+    """{ } → BlockStmt(statements=())"""
+    tokens = [lbrace(), rbrace(), eof()]
+    prog = SExpressionAssembler(tokens).assemble()
+    assert len(prog.statements) == 1
+    stmt = prog.statements[0]
+    assert isinstance(stmt, BlockStmt)
+    assert stmt.statements == ()
+
+
+def test_block_stmt_with_stmts():
+    """{ (var x 1) (print x) } → BlockStmt(VarStmt, PrintStmt)"""
+    tokens = [
+        lbrace(),
+        lparen(), kw(TokenType.VAR), ident("x"), num(1.0), rparen(),
+        lparen(), kw(TokenType.PRINT), ident("x"), rparen(),
+        rbrace(),
+        eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, BlockStmt)
+    assert len(stmt.statements) == 2
+    assert isinstance(stmt.statements[0], VarStmt)
+    assert isinstance(stmt.statements[1], PrintStmt)
+
+
+def test_block_stmt_location():
+    tokens = [lbrace(line=5, col=1), rbrace(), eof()]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert stmt.location.line == 5
+    assert stmt.location.column == 1
+
+
+def test_unclosed_block_raises():
+    """{ (print x) — 닫히지 않은 블록은 AssembleError"""
+    tokens = [lbrace(), lparen(), kw(TokenType.PRINT), ident("x"), rparen(), eof()]
+    with pytest.raises(AssembleError):
+        SExpressionAssembler(tokens).assemble()
