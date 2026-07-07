@@ -7,7 +7,7 @@ from common import Token, TokenizeError, TokenType, SINGLE_CHAR_TOKENS, KEYWORDS
 from interfaces import Tokenizer
 import re
 
-_NUMBER_RE = re.compile(r'^\d+(\.\d+)?$')
+_NUMBER_RE = re.compile(r'^-?\d+(\.\d+)?$')
 
 
 class SExpressionTokenizer(Tokenizer):
