@@ -7,6 +7,8 @@ from common import Token, TokenizeError, TokenType, SINGLE_CHAR_TOKENS, KEYWORDS
 from interfaces import Tokenizer
 import re
 
+_NUMBER_RE = re.compile(r'^\d+(\.\d+)?$')
+
 
 class SExpressionTokenizer(Tokenizer):
     def __init__(self, source):
@@ -17,7 +19,7 @@ class SExpressionTokenizer(Tokenizer):
         initial_token = self.get_initial_token()
 
         for t in initial_token:
-            if t.isdigit() or self.is_float(t):
+            if _NUMBER_RE.match(t):
                 self.set_digit_token(t)
             else:
                 self.set_non_digit_token(t)
