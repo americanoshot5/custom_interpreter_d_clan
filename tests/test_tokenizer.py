@@ -95,3 +95,51 @@ def test_tokenize_empty():
     tokens = src.tokenize()
     assert tokens[0].type == TokenType.EOF
     assert tokens[0].literal == ""
+
+def test_tokenize_a_a_plus_1():
+    src = SExpressionTokenizer("a = a + 1")
+    tokens = src.tokenize()
+    assert tokens[0].type == TokenType.IDENTIFIER
+    assert tokens[0].literal == "a"
+
+def test_tokenize_paren_brace():
+    src = SExpressionTokenizer("if ( a > 5 ) { print 3 + 2 }")
+    tokens = src.tokenize()
+    assert tokens[1].type == TokenType.LEFT_PAREN
+    assert tokens[5].type == TokenType.RIGHT_PAREN
+    assert tokens[6].type == TokenType.LEFT_BRACE
+    assert tokens[11].type == TokenType.RIGHT_BRACE
+
+def test_tokenize_invalid_lparenidentifier():
+    src = SExpressionTokenizer("if (a > 5 ) { print 3 + 2 }")
+    tokens = src.tokenize()
+    assert tokens[1].type == TokenType.LEFT_PAREN
+    assert tokens[5].type == TokenType.RIGHT_PAREN
+    assert tokens[6].type == TokenType.LEFT_BRACE
+    assert tokens[11].type == TokenType.RIGHT_BRACE
+
+def test_tokenize_invalid_rparenidentifier():
+    src = SExpressionTokenizer("if ( a > 5) { print 3 + 2 }")
+    tokens = src.tokenize()
+    assert tokens[1].type == TokenType.LEFT_PAREN
+    assert tokens[5].type == TokenType.RIGHT_PAREN
+    assert tokens[6].type == TokenType.LEFT_BRACE
+    assert tokens[11].type == TokenType.RIGHT_BRACE
+
+
+def test_tokenize_invalid_lbraceidentifier():
+    src = SExpressionTokenizer("if ( a > 5 ) {print 3 + 2 }")
+    tokens = src.tokenize()
+    assert tokens[1].type == TokenType.LEFT_PAREN
+    assert tokens[5].type == TokenType.RIGHT_PAREN
+    assert tokens[6].type == TokenType.LEFT_BRACE
+    assert tokens[11].type == TokenType.RIGHT_BRACE
+
+
+def test_tokenize_invalid_rbraceidentifier():
+    src = SExpressionTokenizer("if ( a > 5 ) { print 3 + 2}")
+    tokens = src.tokenize()
+    assert tokens[1].type == TokenType.LEFT_PAREN
+    assert tokens[5].type == TokenType.RIGHT_PAREN
+    assert tokens[6].type == TokenType.LEFT_BRACE
+    assert tokens[11].type == TokenType.RIGHT_BRACE
