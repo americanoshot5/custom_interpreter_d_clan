@@ -90,3 +90,8 @@ def test_tokenize_pdf_example_test3():
     assert tokens[5].type == TokenType.EOF
     assert tokens[5].literal == ""
 
+def test_tokenize_empty():
+    src = SExpressionTokenizer("")
+    tokens = src.tokenize()
+    assert tokens[0].type == TokenType.EOF
+    assert tokens[0].literal == ""
