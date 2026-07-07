@@ -7,6 +7,8 @@ from common import VarStmt
 from interfaces import *
 from dataclasses import dataclass
 
+OPERATORS = ["+", "-", "*", "/", "<", ">", "!"]
+
 @dataclass
 class Environment:
     parent: Environment | None = None
@@ -50,27 +52,27 @@ class SExpressionExecutor(Executor):
         return result
 
     def _execute_stmt(self, stmt: Stmt) -> RuntimeValue:
-        if isinstance(stmt, ExpressionStmt):    return self._calculate_expr(stmt.expression)
-        if isinstance(stmt, PrintStmt):         ...
+        if isinstance(stmt, ExpressionStmt):    return self._execute_expr(stmt.expression)
+        if isinstance(stmt, PrintStmt):         return self._execute_printstmt(stmt.expression)
         if isinstance(stmt, VarStmt):           return self._execute_varstmt(stmt)
-        if isinstance(stmt, IfStmt):
-            ...
-        if isinstance(stmt, ForStmt):
-            ...
+        if isinstance(stmt, IfStmt):            ...
+        if isinstance(stmt, ForStmt):           ...
         if isinstance(stmt, BlockStmt):         return self._execute_blockstmt(stmt)
 
-
         raise ExecuteError(f"Unsupported statement: {type(stmt).__name__}")
+
+    def _execute_printstmt(self, stmt: PrintStmt) -> RuntimeValue:
+        ...
 
     def _execute_varstmt(self, stmt: VarStmt) -> Any | None:
         value = None
 
         if stmt.initializer is not None:
-            value = self._calculate_expr(stmt.initializer)
+            value = self._execute_expr(stmt.initializer)
 
         self._environment.define(stmt.name, value)
 
-        return value
+        return stmt.name
 
     def _execute_blockstmt(self, block: BlockStmt):
 
@@ -88,19 +90,21 @@ class SExpressionExecutor(Executor):
         finally:
             self._environment = previous
 
-    def _calculate_expr(self, expr: Expr) -> RuntimeValue:
+    def _execute_expr(self, expr: Expr) -> RuntimeValue:
         if isinstance(expr, LiteralExpr):       return expr.value
-        if isinstance(expr, IdentifierExpr):    return expr.name
-        if isinstance(expr, ListExpr):          return self._calculate_list_expr(expr)
+        if isinstance(expr, IdentifierExpr):
+            if expr.name in OPERATORS:          return expr.name
+            else:                               return self._environment.lookup(expr.name)
+        if isinstance(expr, ListExpr):          return self._execute_list_expr(expr)
 
         raise ExecuteError(f"Unsupported expression: {type(expr).__name__}")
 
-    def _calculate_list_expr(self, expr: ListExpr) -> RuntimeValue:
+    def _execute_list_expr(self, expr: ListExpr) -> RuntimeValue:
         if not expr.elements:
             raise ExecuteError("Empty s-expression")
 
-        operator = self._calculate_expr(expr.elements[0])
-        operands = [self._calculate_expr(arg) for arg in expr.elements[1:]]
+        operator = self._execute_expr(expr.elements[0])
+        operands = [self._execute_expr(arg) for arg in expr.elements[1:]]
 
         match operator:
             case "+":
