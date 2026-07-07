@@ -12,6 +12,7 @@ from common import (
     LiteralExpr,
     PrintStmt,
     Program,
+    SetStmt,
     SourceLocation,
     Stmt,
     VarStmt,
@@ -121,6 +122,8 @@ class StaticChecker(Checker):
     def _check_stmt(self, stmt: Stmt, scopes: _ScopeStack) -> None:
         if isinstance(stmt, VarStmt):
             self._check_var_stmt(stmt, scopes)
+        elif isinstance(stmt, SetStmt):
+            self._check_set_stmt(stmt, scopes)
         elif isinstance(stmt, PrintStmt):
             self._check_expr(stmt.expression, scopes)
         elif isinstance(stmt, ExpressionStmt):
@@ -133,6 +136,10 @@ class StaticChecker(Checker):
             self._check_for_stmt(stmt, scopes)
         else:
             raise CheckError(f"Unsupported statement type: {type(stmt).__name__}")
+
+    def _check_set_stmt(self, stmt: SetStmt, scopes: _ScopeStack) -> None:
+        scopes.resolve(stmt.target, stmt.location)
+        self._check_expr(stmt.value, scopes)
 
     def _check_var_stmt(self, stmt: VarStmt, scopes: _ScopeStack) -> None:
         if stmt.initializer is not None:

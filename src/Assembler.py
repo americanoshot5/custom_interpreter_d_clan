@@ -14,6 +14,7 @@ from common import (
     LiteralExpr,
     PrintStmt,
     Program,
+    SetStmt,
     Stmt,
     Token,
     TokenType,
@@ -61,6 +62,8 @@ class SExpressionAssembler(Assembler):
         open_paren = self._advance()  # consume '('
         if self._check(TokenType.VAR):
             return self._parse_var_stmt(open_paren)
+        if self._check(TokenType.SET):
+            return self._parse_set_stmt(open_paren)
         if self._check(TokenType.PRINT):
             return self._parse_print_stmt(open_paren)
         if self._check(TokenType.IF):
@@ -68,6 +71,20 @@ class SExpressionAssembler(Assembler):
         if self._check(TokenType.FOR):
             return self._parse_for_stmt(open_paren)
         return ExpressionStmt(self._parse_list(open_paren))
+
+    def _parse_set_stmt(self, open_paren: Token) -> SetStmt:
+        self._advance()  # consume 'set!'
+        target_token = self._peek()
+        if target_token.type is not TokenType.IDENTIFIER:
+            raise AssembleError(
+                f"Invalid assignment target at "
+                f"{target_token.location.line}:{target_token.location.column}: "
+                f"assignment target must be a variable name"
+            )
+        self._advance()  # consume the identifier
+        value = self._expression()
+        self._consume(TokenType.RIGHT_PAREN, "Expected ')' to close set! statement")
+        return SetStmt(target=target_token.lexeme, value=value, location=open_paren.location)
 
     def _parse_var_stmt(self, open_paren: Token) -> VarStmt:
         self._advance()  # consume 'var'
