@@ -25,7 +25,7 @@ class SExpressionTokenizer(Tokenizer):
         return self.token
 
     def get_initial_token(self) -> list[Any]:
-        pattern = r'\s+|[()]|"[^"]*"|[^\s()]+'
+        pattern = r'\s+|[(){}]|"[^"]*"|[^\s(){}]+'
         tokens = re.findall(pattern, self.source)
         token = [token for token in tokens if not token.isspace()]
         return token
@@ -43,9 +43,20 @@ class SExpressionTokenizer(Tokenizer):
             type = TokenType.STRING
             literal = t.strip("\"")
         else:
+            self.check_invalid_identifier_name(t)
             type = TokenType.IDENTIFIER
             literal = t
         self.token.append(Token(type=type, lexeme=t, literal=literal))
+
+    def check_invalid_identifier_name(self, t):
+        if "(" in t:
+            raise TokenizeError(f'{t} is not a valid identifier with LEFT_PAREN')
+        if ")" in t:
+            raise TokenizeError(f'{t} is not a valid identifier with RIGHT_PAREN')
+        if "{" in t:
+            raise TokenizeError(f'{t} is not a valid identifier with LEFT_BRACE')
+        if "}" in t:
+            raise TokenizeError(f'{t} is not a valid identifier with RIGHT_BRACE')
 
     def set_keword_token(self, t):
         type = KEYWORDS[t]
