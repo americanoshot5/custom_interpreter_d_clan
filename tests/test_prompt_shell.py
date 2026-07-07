@@ -1,4 +1,5 @@
 from prompt_shell import is_balanced, run_shell
+from common import TokenizeError
 
 
 def _scripted_read_line(lines):
@@ -52,23 +53,11 @@ def test_eof_terminates_loop():
     assert outputs == []
 
 
-def test_single_line_success_prints_result():
-    calls = {}
-
-    def fake_tokenize(source):
-        calls["tokenize"] = source
-        return ["TOKENS"]
-
-    def fake_assemble(tokens):
-        calls["assemble"] = tokens
-        return "PROGRAM"
-
-    def fake_check(program):
-        calls["check"] = program
-
-    def fake_execute(program):
-        calls["execute"] = program
-        return 3.0
+def test_single_line_success_prints_result(mocker):
+    fake_tokenize = mocker.Mock(return_value=["TOKENS"])
+    fake_assemble = mocker.Mock(return_value="PROGRAM")
+    fake_check = mocker.Mock(return_value=None)
+    fake_execute = mocker.Mock(return_value=3.0)
 
     outputs = []
     run_shell(
@@ -80,17 +69,14 @@ def test_single_line_success_prints_result():
         execute=fake_execute,
     )
     assert outputs == ["3.0"]
-    assert calls["tokenize"] == "(+ 1 2)"
-    assert calls["assemble"] == ["TOKENS"]
-    assert calls["check"] == "PROGRAM"
-    assert calls["execute"] == "PROGRAM"
+    fake_tokenize.assert_called_once_with("(+ 1 2)")
+    fake_assemble.assert_called_once_with(["TOKENS"])
+    fake_check.assert_called_once_with("PROGRAM")
+    fake_execute.assert_called_once_with("PROGRAM")
 
 
-def test_pipeline_error_is_reported_and_loop_continues():
-    from common import TokenizeError
-
-    def fake_tokenize(source):
-        raise TokenizeError("boom")
+def test_pipeline_error_is_reported_and_loop_continues(mocker):
+    fake_tokenize = mocker.Mock(side_effect=TokenizeError("boom"))
 
     outputs = []
     run_shell(
@@ -117,41 +103,27 @@ def test_blank_line_is_skipped_without_pipeline_call():
     assert outputs == []
 
 
-def test_balanced_expression_waits_for_blank_line_before_dispatch():
-    calls = []
-
-    def fake_tokenize(source):
-        calls.append(source)
-        return ["TOKENS"]
+def test_balanced_expression_waits_for_blank_line_before_dispatch(mocker):
+    fake_tokenize = mocker.Mock(return_value=["TOKENS"])
 
     outputs = []
     run_shell(
         read_line=_scripted_read_line(["(+ 1 2)", "exit"]),
         write_output=outputs.append,
         tokenize=fake_tokenize,
-        assemble=lambda tokens: "PROGRAM",
-        check=lambda program: None,
-        execute=lambda program: 3.0,
+        assemble=mocker.Mock(return_value="PROGRAM"),
+        check=mocker.Mock(return_value=None),
+        execute=mocker.Mock(return_value=3.0),
     )
     assert outputs == []
-    assert calls == []
+    fake_tokenize.assert_not_called()
 
 
-def test_multiline_expression_submits_on_blank_line():
-    calls = {}
-
-    def fake_tokenize(source):
-        calls["tokenize"] = source
-        return ["TOKENS"]
-
-    def fake_assemble(tokens):
-        return "PROGRAM"
-
-    def fake_check(program):
-        pass
-
-    def fake_execute(program):
-        return 7.0
+def test_multiline_expression_submits_on_blank_line(mocker):
+    fake_tokenize = mocker.Mock(return_value=["TOKENS"])
+    fake_assemble = mocker.Mock(return_value="PROGRAM")
+    fake_check = mocker.Mock(return_value=None)
+    fake_execute = mocker.Mock(return_value=7.0)
 
     outputs = []
     run_shell(
@@ -163,44 +135,36 @@ def test_multiline_expression_submits_on_blank_line():
         execute=fake_execute,
     )
     assert outputs == ["7.0"]
-    assert calls["tokenize"] == "(+ 1\n(* 2 3))"
+    fake_tokenize.assert_called_once_with("(+ 1\n(* 2 3))")
 
 
-def test_multiple_top_level_expressions_submit_together_on_blank_line():
-    calls = {}
-
-    def fake_tokenize(source):
-        calls["tokenize"] = source
-        return ["TOKENS"]
+def test_multiple_top_level_expressions_submit_together_on_blank_line(mocker):
+    fake_tokenize = mocker.Mock(return_value=["TOKENS"])
 
     outputs = []
     run_shell(
         read_line=_scripted_read_line(['(print "hello")', "(+ 1 2)", "", "exit"]),
         write_output=outputs.append,
         tokenize=fake_tokenize,
-        assemble=lambda tokens: "PROGRAM",
-        check=lambda program: None,
-        execute=lambda program: 3.0,
+        assemble=mocker.Mock(return_value="PROGRAM"),
+        check=mocker.Mock(return_value=None),
+        execute=mocker.Mock(return_value=3.0),
     )
     assert outputs == ["3.0"]
-    assert calls["tokenize"] == '(print "hello")\n(+ 1 2)'
+    fake_tokenize.assert_called_once_with('(print "hello")\n(+ 1 2)')
 
 
-def test_main_wires_run_shell_with_real_pipeline_functions(monkeypatch):
+def test_main_wires_run_shell_with_real_pipeline_functions(mocker):
     import prompt_shell
     from Assembler import assemble
     from Checker import check
     from Executor import execute
     from Tokenizer import tokenize
 
-    captured = {}
-
-    def fake_run_shell(**kwargs):
-        captured.update(kwargs)
-
-    monkeypatch.setattr(prompt_shell, "run_shell", fake_run_shell)
+    fake_run_shell = mocker.patch.object(prompt_shell, "run_shell")
     prompt_shell.main()
 
+    captured = fake_run_shell.call_args.kwargs
     assert captured["read_line"] is input
     assert captured["write_output"] is print
     assert captured["tokenize"] is tokenize
