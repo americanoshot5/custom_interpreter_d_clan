@@ -69,4 +69,4 @@ class SExpressionTokenizer(Tokenizer):
 
 DefaultTokenizer = SExpressionTokenizer
 
-__all__ = ["DefaultTokenizer", "SExpressionTokenizer", "tokenize"]
+__all__ = ["DefaultTokenizer", "SExpressionTokenizer"]
