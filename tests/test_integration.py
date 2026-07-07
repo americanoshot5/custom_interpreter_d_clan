@@ -1,25 +1,6 @@
 """
 docs/테스트스크립트.md 의 시나리오를 S-expression 문법으로 옮긴 통합 테스트.
 
---- 제안 문법 (Assembler 가 아직 지원하지 않는 것들) ---
-아직 Assembler 는 var/print/if/for/블록을 구조화된 Stmt(VarStmt/PrintStmt/
-IfStmt/ForStmt/BlockStmt)로 파싱하지 않고, 전부 평평한 ListExpr 로만 파싱한다.
-Checker/Executor 는 이 Stmt 들을 처리하는 로직이 이미 있으므로, Assembler 가
-아래 문법으로 파싱해주면 그대로 동작할 것으로 기대하고 작성했다.
-
-  변수 선언       (var <name> <initializer>)
-  재할당          (set! <name> <expr>)              # 새 노드 없이 ListExpr 특수형으로 처리 가능
-  출력            (print <expr>)
-  블록            { <stmt> <stmt> ... }              # LEFT_BRACE/RIGHT_BRACE 토큰은 이미 존재
-  조건문          (if <cond> <then>)
-                  (if <cond> <then> <else>)
-  반복문          (for <iterator> <start> <end> <body>)
-                  # ForStmt(iterator, start, end, body) 형태에 맞춤.
-                  # start <= iterator < end, 매 반복 +1 이라고 가정.
-
-각 테스트는 실제로 통과하는지 실행해 확인했다. 실패하는 것은 왜 실패하는지
-주석으로 남겨서, 어느 담당자(Assembler/Checker/Executor)에게 전달해야 하는지
-알 수 있게 했다.
 """
 
 import pytest
