@@ -19,8 +19,7 @@ class SExpressionTokenizer(Tokenizer):
         initial_token = self.get_initial_token()
 
         for t in initial_token:
-
-        if _NUMBER_RE.match(t):
+            if _NUMBER_RE.match(t):
                 self.set_digit_token(t)
             else:
                 self.set_non_digit_token(t)
