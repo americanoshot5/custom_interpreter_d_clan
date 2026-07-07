@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.common import (
+from common import (
     AssembleError,
     ExpressionStmt,
     IdentifierExpr,
@@ -22,9 +22,11 @@ from src.common import (
     SourceLocation,
     Token,
     TokenType,
+    Stmt,
+    CheckError
 )
-from src.interfaces import Assembler
-from src.Assembler import SExpressionAssembler, assemble
+from interfaces import Assembler
+from Assembler import SExpressionAssembler, assemble, DefaultAssembler
 
 
 def _token(token_type, lexeme, literal=None):
@@ -638,7 +640,6 @@ def test_module_assemble_returns_program():
 # ============================================================
 
 def test_default_assembler_is_sexpressionassembler():
-    from src.Assembler import DefaultAssembler
     assert DefaultAssembler is SExpressionAssembler
 
 
@@ -715,8 +716,6 @@ def test_check_eof_type_at_eof_returns_false(asm):
 
 def test_stmt_as_list_element_raises(mocker):
     """_expression() 이 Stmt 를 반환할 경우 AssembleError 가 발생해야 한다."""
-    from src.common import ExpressionStmt, IdentifierExpr
-
     fake_stmt = ExpressionStmt(IdentifierExpr("x", location=loc(3, 7)), location=loc(3, 7))
 
     call_count = 0
@@ -738,8 +737,6 @@ def test_stmt_as_list_element_raises(mocker):
 
 def test_stmt_as_list_element_error_message_contains_stmt_location(mocker):
     """에러 메시지에 Stmt 의 위치(line:col)가 포함되어야 한다."""
-    from src.common import ExpressionStmt, IdentifierExpr
-
     fake_stmt = ExpressionStmt(IdentifierExpr("y", location=loc(5, 2)), location=loc(5, 2))
 
     original = SExpressionAssembler._expression
@@ -762,8 +759,6 @@ def test_stmt_as_list_element_error_message_contains_stmt_location(mocker):
 def test_stmt_with_none_location_as_list_element_raises(mocker):
     """Stmt 의 location 이 None 이어도 AssembleError 가 발생하고
     에러 메시지에 'unknown' 이 포함되어야 한다."""
-    from src.common import ExpressionStmt, IdentifierExpr
-
     fake_stmt = ExpressionStmt(IdentifierExpr("z"), location=None)
 
     original = SExpressionAssembler._expression
@@ -819,7 +814,6 @@ def test_top_level_stmt_with_none_location_raises(mocker):
 
 def test_program_statements_are_all_stmt_instances():
     """assemble() 이 반환하는 Program.statements 의 모든 요소는 Stmt 여야 한다."""
-    from src.common import Stmt
     tokens = [num(1.0), ident("foo"), lparen(), num(2.0), rparen(), eof()]
     prog = SExpressionAssembler(tokens).assemble()
     assert all(isinstance(s, Stmt) for s in prog.statements)
@@ -895,7 +889,6 @@ def test_complex_if_expression_tree_structure():
 
 def test_complex_if_expression_no_stmt_in_tree():
     """트리의 모든 Expr 노드는 Stmt 를 포함하지 않아야 한다."""
-    from src.common import Stmt
     tokens = [
         lparen(),
         kw(TokenType.IF),
