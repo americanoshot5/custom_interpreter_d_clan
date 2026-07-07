@@ -36,6 +36,7 @@ class TokenType(str, Enum):
     OR = "or"
     PRINT = "print"
 
+    NOT = "~"
     EOF = "EOF"
 
 
@@ -65,10 +66,10 @@ SINGLE_CHAR_TOKENS: dict[str, TokenType] = {
     "=": TokenType.EQUAL,
     ">": TokenType.GREATER,
     "<": TokenType.LESS,
+    "~": TokenType.NOT,
 }
 
 SINGLE_INVALID_CHAR_TOKENS: dict[str, str] = {
-    "~": "~",
     "`": "`",
     "!": "!",
     "@": "@",

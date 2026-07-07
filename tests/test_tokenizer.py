@@ -158,3 +158,22 @@ def test_tokenize_floating_point():
     assert tokens[2].type == TokenType.NUMBER
     assert tokens[2].literal == 3.14
     assert tokens[3].type == TokenType.RIGHT_PAREN
+
+def test_tokenize_1item_operation():
+    src = SExpressionTokenizer("-5")
+    tokens = src.tokenize()
+    assert tokens[0].type == TokenType.NUMBER
+    assert tokens[0].literal == -5.0
+
+def test_tokenize_1item_operation_w_split():
+    src = SExpressionTokenizer("- 5")
+    tokens = src.tokenize()
+    assert tokens[0].type == TokenType.MINUS
+    assert tokens[1].type == TokenType.NUMBER
+    assert tokens[1].literal == 5.0
+
+def test_tokenize_Not_operation():
+    src = SExpressionTokenizer("~ True")
+    tokens = src.tokenize()
+    assert tokens[0].type == TokenType.NOT
+    assert tokens[1].type == TokenType.TRUE
