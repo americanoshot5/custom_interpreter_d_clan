@@ -144,7 +144,7 @@ def test_tokenize_invalid_rbraceidentifier():
     assert tokens[6].type == TokenType.LEFT_BRACE
     assert tokens[11].type == TokenType.RIGHT_BRACE
 
-def test_tokenize__rbraceidentifier():
+def test_tokenize_var_assign():
     src = SExpressionTokenizer("var a 10")
     tokens = src.tokenize()
     assert tokens[0].type == TokenType.VAR
