@@ -121,6 +121,31 @@ def test_execute_ifstmt_else_branch():
 
     assert calc._environment.lookup('test') == 9
 
+def test_execute_forstmt():
+    iterator = 'i'
+    start = LiteralExpr(4)
+    end = LiteralExpr(7)
+    body = SetStmt(target='pre', value=ListExpr((IdentifierExpr("+"), IdentifierExpr(iterator), LiteralExpr(3))))
+
+    program_pre = Program(
+        (VarStmt(name='pre', initializer=LiteralExpr(1)),)
+    )
+
+    program = Program(
+        (VarStmt(name='test', initializer=ListExpr((IdentifierExpr("*"), LiteralExpr(1), LiteralExpr(3)))),)
+    )
+
+    program_for = Program(
+        (ForStmt(iterator=iterator,start=start, end=end, body=body),)
+    )
+
+    calc = SExpressionExecutor()
+    calc.execute(program_pre)
+    calc.execute(program)
+    calc.execute(program_for)
+
+    assert calc._environment.lookup('pre') == 9
+
 def test_execute_printstmt(capsys):
     program = Program(
         (PrintStmt(ListExpr((IdentifierExpr("+"), LiteralExpr(1), LiteralExpr(2)))),)
