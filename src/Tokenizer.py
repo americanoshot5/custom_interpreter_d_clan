@@ -40,8 +40,8 @@ class SExpressionTokenizer(Tokenizer):
     def set_non_digit_token(self, t):
         if len(t) == 1:
             self.set_single_char_token(t)
-        elif t in KEYWORDS.keys():
-            self.set_keword_token(t)
+        elif t.lower() in KEYWORDS.keys():
+            self.set_keword_token(t.lower())
         else:
             self.set_string_identifier_token(t)
 
