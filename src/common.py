@@ -112,21 +112,17 @@ class Stmt(Node, ABC):
 class LiteralExpr(Expr):
     value: LiteralValue
 
-
 @dataclass(frozen=True, slots=True)
 class IdentifierExpr(Expr):
     name: str
-
 
 @dataclass(frozen=True, slots=True)
 class ListExpr(Expr):
     elements: tuple[Expr, ...]
 
-
 @dataclass(frozen=True, slots=True)
 class ExpressionStmt(Stmt):
     expression: Expr
-
 
 @dataclass(frozen=True, slots=True)
 class VarStmt(Stmt):
