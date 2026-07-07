@@ -14,17 +14,21 @@ class SExpressionTokenizer(Tokenizer):
         self.source = source
 
     def tokenize(self) -> Sequence[Token]:
-        pattern = r'\s+|[()]|"[^"]*"|[^\s()]+'
-        tokens = re.findall(pattern, self.source)
-        token = [token for token in tokens if not token.isspace()]
+        initial_token = self.get_initial_token()
 
-        for t in token:
+        for t in initial_token:
             if t.isdigit():
                 self.set_digit_token(t)
             else:
                 self.set_non_digit_token(t)
         self.token.append(Token(TokenType.EOF, ""))
         return self.token
+
+    def get_initial_token(self) -> list[Any]:
+        pattern = r'\s+|[()]|"[^"]*"|[^\s()]+'
+        tokens = re.findall(pattern, self.source)
+        token = [token for token in tokens if not token.isspace()]
+        return token
 
     def set_non_digit_token(self, t):
         if len(t) == 1:
