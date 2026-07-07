@@ -77,6 +77,11 @@ SINGLE_INVALID_CHAR_TOKENS: dict[str, str] = {
     "%": "%"
 }
 
+BUILTIN_OPS: frozenset[str] = frozenset({
+    "+", "-", "*", "/", "<", ">", "=",
+    "and", "or", "not",
+})
+
 LiteralValue = str | float | bool | None
 
 
@@ -193,6 +198,7 @@ RuntimeValue = Any
 
 __all__ = [
     "AssembleError",
+    "BUILTIN_OPS",
     "BlockStmt",
     "CheckError",
     "ExecuteError",
