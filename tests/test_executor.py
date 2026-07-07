@@ -95,6 +95,32 @@ def test_calculate_nested_arithmetic2():
     )
     assert execute(program) == 8.0
 
+def test_execute_ifstmt_then_branch():
+    condition = ListExpr((IdentifierExpr("<"), LiteralExpr(2), LiteralExpr(3)))
+    then_branch = VarStmt(name='test', initializer=ListExpr((IdentifierExpr("*"), LiteralExpr(1), LiteralExpr(3))))
+    else_branch = VarStmt(name='test', initializer=ListExpr((IdentifierExpr("*"), LiteralExpr(3), LiteralExpr(3))))
+    program = Program(
+        (IfStmt(condition=condition, then_branch=then_branch, else_branch=else_branch),)
+    )
+
+    calc = SExpressionExecutor()
+    calc.execute(program)
+
+    assert calc._environment.lookup('test') == 3
+
+def test_execute_ifstmt_else_branch():
+    condition = ListExpr((IdentifierExpr("<"), LiteralExpr(4), LiteralExpr(3)))
+    then_branch = VarStmt(name='test', initializer=ListExpr((IdentifierExpr("*"), LiteralExpr(1), LiteralExpr(3))))
+    else_branch = VarStmt(name='test', initializer=ListExpr((IdentifierExpr("*"), LiteralExpr(3), LiteralExpr(3))))
+    program = Program(
+        (IfStmt(condition=condition, then_branch=then_branch, else_branch=else_branch),)
+    )
+
+    calc = SExpressionExecutor()
+    calc.execute(program)
+
+    assert calc._environment.lookup('test') == 9
+
 def test_execute_printstmt(capsys):
     program = Program(
         (PrintStmt(ListExpr((IdentifierExpr("+"), LiteralExpr(1), LiteralExpr(2)))),)

@@ -55,8 +55,8 @@ class SExpressionExecutor(Executor):
         if isinstance(stmt, ExpressionStmt):    return self._execute_expr(stmt.expression)
         if isinstance(stmt, PrintStmt):         return self._execute_printstmt(stmt.expression)
         if isinstance(stmt, VarStmt):           return self._execute_varstmt(stmt)
-        if isinstance(stmt, IfStmt):            ...
-        if isinstance(stmt, ForStmt):           ...
+        if isinstance(stmt, IfStmt):            return self._execute_ifstmt(stmt)
+        if isinstance(stmt, ForStmt):           return self._execute_forstmt(stmt)
         if isinstance(stmt, BlockStmt):         return self._execute_blockstmt(stmt)
 
         raise ExecuteError(f"Unsupported statement: {type(stmt).__name__}")
@@ -65,6 +65,15 @@ class SExpressionExecutor(Executor):
         value = self._execute_expr(expr)
         print(value)
         return None
+
+    def _execute_ifstmt(self, stmt: IfStmt) -> RuntimeValue:
+        if self._execute_expr(stmt.condition):
+            return self._execute_stmt(stmt.then_branch)
+        else:
+            return self._execute_stmt(stmt.else_branch)
+
+    def _execute_forstmt(self, stmt: ForStmt) -> RuntimeValue:
+        ...
 
     def _execute_varstmt(self, stmt: VarStmt) -> Any | None:
         value = None
