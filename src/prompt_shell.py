@@ -61,7 +61,8 @@ def run_shell(
             except LanguageError as error:
                 write_output(f"Error: {error}")
             else:
-                write_output(str(result))
+                if result is not None:
+                    write_output(str(result))
 
             buffer = []
             continue
