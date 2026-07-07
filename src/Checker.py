@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from typing import ClassVar
+
 from common import (
+    BUILTIN_OPS,
     BlockStmt,
     CheckError,
     Expr,
@@ -18,11 +21,6 @@ from common import (
     VarStmt,
 )
 from interfaces import Checker
-
-_BUILTINS: frozenset[str] = frozenset({
-    "+", "-", "*", "/", ">", "<", "=",
-    "and", "or", "not",
-})
 
 
 class _ScopeStack:
@@ -45,7 +43,7 @@ class _ScopeStack:
     def __init__(self) -> None:
         # 전역 스코프에 내장 연산자를 미리 등록한다
         self._stack: list[dict[str, SourceLocation | None]] = [
-            {name: None for name in _BUILTINS}
+            {name: None for name in BUILTIN_OPS}
         ]
         self._declaring: str | None = None
 
@@ -112,6 +110,17 @@ class StaticChecker(Checker):
     4. for 반복자 재선언 : for 스코프 안(블록 없이)에서 반복자와 동일 이름 선언
     """
 
+    # 새로운 Stmt 종류 추가 시: 이 테이블에 한 줄 + 검사 메서드 하나만 추가하면 됩니다.
+    _STMT_DISPATCH: ClassVar[dict[type, str]] = {
+        VarStmt:        "_check_var_stmt",
+        SetStmt:        "_check_set_stmt",
+        PrintStmt:      "_check_print_stmt",
+        ExpressionStmt: "_check_exprstmt",
+        BlockStmt:      "_check_block_stmt",
+        IfStmt:         "_check_if_stmt",
+        ForStmt:        "_check_for_stmt",
+    }
+
     def check(self, program: Program) -> None:
         scopes = _ScopeStack()
         for stmt in program.statements:
@@ -120,22 +129,16 @@ class StaticChecker(Checker):
     # ── 문(Stmt) ──────────────────────────────────────────────────────────────
 
     def _check_stmt(self, stmt: Stmt, scopes: _ScopeStack) -> None:
-        if isinstance(stmt, VarStmt):
-            self._check_var_stmt(stmt, scopes)
-        elif isinstance(stmt, SetStmt):
-            self._check_set_stmt(stmt, scopes)
-        elif isinstance(stmt, PrintStmt):
-            self._check_expr(stmt.expression, scopes)
-        elif isinstance(stmt, ExpressionStmt):
-            self._check_expr(stmt.expression, scopes)
-        elif isinstance(stmt, BlockStmt):
-            self._check_block_stmt(stmt, scopes)
-        elif isinstance(stmt, IfStmt):
-            self._check_if_stmt(stmt, scopes)
-        elif isinstance(stmt, ForStmt):
-            self._check_for_stmt(stmt, scopes)
-        else:
+        method_name = self._STMT_DISPATCH.get(type(stmt))
+        if method_name is None:
             raise CheckError(f"Unsupported statement type: {type(stmt).__name__}")
+        getattr(self, method_name)(stmt, scopes)
+
+    def _check_print_stmt(self, stmt: PrintStmt, scopes: _ScopeStack) -> None:
+        self._check_expr(stmt.expression, scopes)
+
+    def _check_exprstmt(self, stmt: ExpressionStmt, scopes: _ScopeStack) -> None:
+        self._check_expr(stmt.expression, scopes)
 
     def _check_set_stmt(self, stmt: SetStmt, scopes: _ScopeStack) -> None:
         scopes.resolve(stmt.target, stmt.location)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import ClassVar
 
 from common import (
     AssembleError,
@@ -24,6 +25,16 @@ from interfaces import Assembler
 
 
 class SExpressionAssembler(Assembler):
+
+    # 새로운 special form 추가 시: 이 테이블에 한 줄 + 파서 메서드 하나만 추가하면 됩니다.
+    _SPECIAL_FORMS: ClassVar[dict[TokenType, str]] = {
+        TokenType.VAR:   "_parse_var_stmt",
+        TokenType.SET:   "_parse_set_stmt",
+        TokenType.PRINT: "_parse_print_stmt",
+        TokenType.IF:    "_parse_if_stmt",
+        TokenType.FOR:   "_parse_for_stmt",
+    }
+
     def __init__(self, tokens: Sequence[Token]) -> None:
         self._tokens = list(tokens)
         self._current = 0
@@ -60,16 +71,9 @@ class SExpressionAssembler(Assembler):
 
     def _parse_list_stmt(self) -> Stmt:
         open_paren = self._advance()  # consume '('
-        if self._check(TokenType.VAR):
-            return self._parse_var_stmt(open_paren)
-        if self._check(TokenType.SET):
-            return self._parse_set_stmt(open_paren)
-        if self._check(TokenType.PRINT):
-            return self._parse_print_stmt(open_paren)
-        if self._check(TokenType.IF):
-            return self._parse_if_stmt(open_paren)
-        if self._check(TokenType.FOR):
-            return self._parse_for_stmt(open_paren)
+        method_name = self._SPECIAL_FORMS.get(self._peek().type)
+        if method_name:
+            return getattr(self, method_name)(open_paren)
         return ExpressionStmt(self._parse_list(open_paren))
 
     def _parse_set_stmt(self, open_paren: Token) -> SetStmt:
