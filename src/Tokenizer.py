@@ -17,7 +17,7 @@ class SExpressionTokenizer(Tokenizer):
         initial_token = self.get_initial_token()
 
         for t in initial_token:
-            if t.isdigit():
+            if t.isdigit() or self.is_float(t):
                 self.set_digit_token(t)
             else:
                 self.set_non_digit_token(t)
@@ -29,6 +29,13 @@ class SExpressionTokenizer(Tokenizer):
         tokens = re.findall(pattern, self.source)
         token = [token for token in tokens if not token.isspace()]
         return token
+
+    def is_float(self, t):
+        try:
+            float(t)
+            return True
+        except:
+            return False
 
     def set_non_digit_token(self, t):
         if len(t) == 1:
