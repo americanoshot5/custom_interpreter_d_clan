@@ -65,6 +65,16 @@ SINGLE_CHAR_TOKENS: dict[str, TokenType] = {
     "<": TokenType.LESS,
 }
 
+SINGLE_INVALID_CHAR_TOKENS: dict[str, str] = {
+    "~": "~",
+    "`": "`",
+    "!": "!",
+    "@": "@",
+    "#": "#",
+    "$": "$",
+    "%": "%"
+}
+
 LiteralValue = str | float | bool | None
 
 
