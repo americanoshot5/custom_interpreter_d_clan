@@ -139,10 +139,14 @@ class StaticChecker(Checker):
             # 초기화식 검사 시 자기 이름을 "선언 중" 으로 마킹한다.
             # 초기화식 안에서 같은 이름이 나오면 자기 참조로 판정된다.
             scopes.begin_declaring(stmt.name)
-            try:
-                self._check_expr(stmt.initializer, scopes)
-            finally:
-                scopes.end_declaring()
+            # try:
+            #     self._check_expr(stmt.initializer, scopes)
+            # finally:
+            #     scopes.end_declaring()
+            ########## Apply Refactoring ########################
+            self._check_expr(stmt.initializer, scopes)
+            scopes.end_declaring()
+            #####################################################
 
         # 초기화식 검사가 통과된 후 현재 스코프에 등록한다 (중복 선언 검출)
         scopes.declare(stmt.name, stmt.location)
