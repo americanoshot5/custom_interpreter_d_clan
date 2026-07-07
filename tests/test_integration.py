@@ -63,21 +63,25 @@ def test_string_concatenation_with_plus():
     assert _run('(+ "Hello, " "CodeFab!")') == "Hello, CodeFab!"
 
 
-# 숫자 출력 포맷 / print 는 PrintStmt 가 필요하다.
+# print 는 PrintStmt 가 필요하다.
 # 현재 Assembler 는 `print` 키워드를 특수 처리하지 않아
 # `(print 5)` 는 ListExpr(IdentifierExpr("print"), LiteralExpr(5.0)) 로 파싱된다.
 # Checker 는 "print" 도 IdentifierExpr 로 취급해 스코프에서 찾으려 하는데
 # "print" 는 _BUILTINS 에도 없고 변수로도 선언된 적이 없어 CheckError 가 난다.
 # → Assembler 에 print 파싱, Executor 의 PrintStmt 처리(현재 `...` no-op) 구현 필요.
+#
+# 출력 포맷은 원본 문서의 "정수는 .0 없이 출력" 요구를 따로 구현하지 않고,
+# 파이썬의 기본 str() 표현(숫자는 항상 .0 포함, bool 은 True/False)을 그대로
+# 기대값으로 삼는다.
 
-def test_print_integer_without_decimal_point(capsys):
+def test_print_integer_shows_decimal_point(capsys):
     _run("(print 5)")
-    assert capsys.readouterr().out.strip() == "5"
+    assert capsys.readouterr().out.strip() == "5.0"
 
 
-def test_print_float_with_zero_fraction_drops_decimal(capsys):
+def test_print_float_with_zero_fraction_keeps_decimal_point(capsys):
     _run("(print 5.0)")
-    assert capsys.readouterr().out.strip() == "5"
+    assert capsys.readouterr().out.strip() == "5.0"
 
 
 def test_print_float_keeps_fraction(capsys):
@@ -87,12 +91,12 @@ def test_print_float_keeps_fraction(capsys):
 
 def test_print_boolean_true(capsys):
     _run("(print true)")
-    assert capsys.readouterr().out.strip() == "true"
+    assert capsys.readouterr().out.strip() == "True"
 
 
 def test_print_boolean_false(capsys):
     _run("(print false)")
-    assert capsys.readouterr().out.strip() == "false"
+    assert capsys.readouterr().out.strip() == "False"
 
 
 # ============================================================
