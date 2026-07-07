@@ -4,15 +4,20 @@ from collections.abc import Sequence
 
 from common import (
     AssembleError,
+    BlockStmt,
     Expr,
     ExpressionStmt,
+    ForStmt,
     IdentifierExpr,
+    IfStmt,
     ListExpr,
     LiteralExpr,
+    PrintStmt,
     Program,
     Stmt,
     Token,
     TokenType,
+    VarStmt,
 )
 from interfaces import Assembler
 
@@ -23,12 +28,93 @@ class SExpressionAssembler(Assembler):
         self._current = 0
 
     def assemble(self) -> Program:
-        statements: list[ExpressionStmt] = []
+        statements: list[Stmt] = []
         while not self._is_at_end():
-            expr = self._expression()
-            self._assert_expr(expr)
-            statements.append(ExpressionStmt(expr))
+            statements.append(self._statement())
         return Program(tuple(statements))
+
+    # ── Statement parsers ────────────────────────────────────────────────────
+
+    def _statement(self) -> Stmt:
+        if self._check(TokenType.LEFT_BRACE):
+            return self._parse_block()
+        if self._check(TokenType.LEFT_PAREN):
+            return self._parse_list_stmt()
+        expr = self._expression()
+        self._assert_expr(expr)
+        return ExpressionStmt(expr)
+
+    def _parse_block(self) -> BlockStmt:
+        open_brace = self._advance()  # consume '{'
+        stmts: list[Stmt] = []
+        while not self._check(TokenType.RIGHT_BRACE):
+            if self._is_at_end():
+                raise AssembleError(
+                    f"Missing '}}' for block opened at "
+                    f"{open_brace.location.line}:{open_brace.location.column}"
+                )
+            stmts.append(self._statement())
+        self._consume(TokenType.RIGHT_BRACE, "Expected '}' after block")
+        return BlockStmt(tuple(stmts), location=open_brace.location)
+
+    def _parse_list_stmt(self) -> Stmt:
+        open_paren = self._advance()  # consume '('
+        if self._check(TokenType.VAR):
+            return self._parse_var_stmt(open_paren)
+        if self._check(TokenType.PRINT):
+            return self._parse_print_stmt(open_paren)
+        if self._check(TokenType.IF):
+            return self._parse_if_stmt(open_paren)
+        if self._check(TokenType.FOR):
+            return self._parse_for_stmt(open_paren)
+        return ExpressionStmt(self._parse_list(open_paren))
+
+    def _parse_var_stmt(self, open_paren: Token) -> VarStmt:
+        self._advance()  # consume 'var'
+        name_token = self._consume(TokenType.IDENTIFIER, "Expected variable name after 'var'")
+        initializer = None
+        if not self._check(TokenType.RIGHT_PAREN):
+            initializer = self._expression()
+        self._consume(TokenType.RIGHT_PAREN, "Expected ')' to close var statement")
+        return VarStmt(name=name_token.lexeme, initializer=initializer, location=open_paren.location)
+
+    def _parse_print_stmt(self, open_paren: Token) -> PrintStmt:
+        self._advance()  # consume 'print'
+        expr = self._expression()
+        self._consume(TokenType.RIGHT_PAREN, "Expected ')' to close print statement")
+        return PrintStmt(expression=expr, location=open_paren.location)
+
+    def _parse_if_stmt(self, open_paren: Token) -> IfStmt:
+        self._advance()  # consume 'if'
+        condition = self._expression()
+        then_branch = self._statement()
+        else_branch = None
+        if not self._check(TokenType.RIGHT_PAREN):
+            else_branch = self._statement()
+        self._consume(TokenType.RIGHT_PAREN, "Expected ')' to close if statement")
+        return IfStmt(
+            condition=condition,
+            then_branch=then_branch,
+            else_branch=else_branch,
+            location=open_paren.location,
+        )
+
+    def _parse_for_stmt(self, open_paren: Token) -> ForStmt:
+        self._advance()  # consume 'for'
+        iter_token = self._consume(TokenType.IDENTIFIER, "Expected iterator name after 'for'")
+        start = self._expression()
+        end = self._expression()
+        body = self._statement()
+        self._consume(TokenType.RIGHT_PAREN, "Expected ')' to close for statement")
+        return ForStmt(
+            iterator=iter_token.lexeme,
+            start=start,
+            end=end,
+            body=body,
+            location=open_paren.location,
+        )
+
+    # ── Expression parsers ───────────────────────────────────────────────────
 
     def _expression(self) -> Expr:
         token = self._advance()
@@ -63,6 +149,8 @@ class SExpressionAssembler(Assembler):
             loc_str = f"{loc.line}:{loc.column}" if loc is not None else "unknown"
             raise AssembleError(f"Statement cannot be used as expression at {loc_str}")
 
+    # ── Token navigation ─────────────────────────────────────────────────────
+
     def _consume(self, token_type: TokenType, message: str) -> Token:
         if self._check(token_type):
             return self._advance()
@@ -85,6 +173,7 @@ class SExpressionAssembler(Assembler):
 
     def _previous(self) -> Token:
         return self._tokens[self._current - 1]
+
 
 DefaultAssembler = SExpressionAssembler
 
