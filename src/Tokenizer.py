@@ -76,4 +76,9 @@ class SExpressionTokenizer(Tokenizer):
 
 DefaultTokenizer = SExpressionTokenizer
 
-__all__ = ["DefaultTokenizer", "SExpressionTokenizer"]
+
+def tokenize(source: str) -> Sequence[Token]:
+    return SExpressionTokenizer(source).tokenize()
+
+
+__all__ = ["DefaultTokenizer", "SExpressionTokenizer", "tokenize"]
