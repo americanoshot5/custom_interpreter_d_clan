@@ -102,11 +102,13 @@ class Stmt(Node, ABC):
 class LiteralExpr(Expr):
     value: LiteralValue
 
-
 @dataclass(frozen=True, slots=True)
 class IdentifierExpr(Expr):
     name: str
 
+@dataclass(frozen=True, slots=True)
+class VarExpr(Expr):
+    name: str
 
 @dataclass(frozen=True, slots=True)
 class ListExpr(Expr):

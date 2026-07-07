@@ -1,6 +1,6 @@
 import pytest
 from common import *
-from Executor import execute
+from Executor import *
 
 def test_calculate_error_division_by_zero():
     program = Program(
@@ -93,3 +93,24 @@ def test_calculate_nested_arithmetic2():
         (ExpressionStmt(ListExpr((IdentifierExpr("+"), inner1, inner3))),)
     )
     assert execute(program) == 8.0
+
+def test_execute_varstmt():
+    program = Program(
+        (VarStmt(name='test', initializer=ListExpr((IdentifierExpr("*"), LiteralExpr(2), LiteralExpr(3)))),)
+    )
+
+    calc = SExpressionExecutor()
+    calc.execute(program)
+
+    assert calc._environment.lookup('test') == 6
+
+def test_execute_error_varstmt():
+    program = Program(
+        (VarStmt(name='test', initializer=ListExpr((IdentifierExpr("*"), LiteralExpr(2), LiteralExpr(3)))),)
+    )
+
+    calc = SExpressionExecutor()
+    calc.execute(program)
+
+    with pytest.raises(ExecuteError):
+        calc._environment.lookup('test_fail')

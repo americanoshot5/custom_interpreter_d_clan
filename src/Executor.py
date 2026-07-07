@@ -1,8 +1,46 @@
 from __future__ import annotations
+
+from typing import Any
+
 from common import *
+from common import VarStmt
 from interfaces import *
+from dataclasses import dataclass
+
+@dataclass
+class Environment:
+    parent: Environment | None = None
+
+    def __post_init__(self):
+        self._values: dict[str, RuntimeValue] = {}
+
+    def define(self, name: str, value: RuntimeValue) -> None:
+        self._values[name] = value
+
+    def lookup(self, name: str) -> RuntimeValue:
+        if name in self._values:
+            return self._values[name]
+
+        if self.parent is not None:
+            return self.parent.lookup(name)
+
+        raise ExecuteError(f"Undefined variable '{name}'")
+
+    def assign(self, name: str, value: RuntimeValue) -> None:
+        if name in self._values:
+            self._values[name] = value
+            return
+
+        if self.parent is not None:
+            self.parent.assign(name, value)
+            return
+
+        raise ExecuteError(f"Undefined variable '{name}'")
 
 class SExpressionExecutor(Executor):
+    def __init__(self):
+        self._environment = Environment()
+
     def execute(self, program: Program) -> RuntimeValue:
         result = None
 
@@ -12,30 +50,48 @@ class SExpressionExecutor(Executor):
         return result
 
     def _execute_stmt(self, stmt: Stmt) -> RuntimeValue:
-        if isinstance(stmt, ExpressionStmt):
-            return self._calculate_expr(stmt.expression)
-        if isinstance(stmt, PrintStmt):
-            ...
-        if isinstance(stmt, VarStmt):
-            ...
+        if isinstance(stmt, ExpressionStmt):    return self._calculate_expr(stmt.expression)
+        if isinstance(stmt, PrintStmt):         ...
+        if isinstance(stmt, VarStmt):           return self._execute_varstmt(stmt)
         if isinstance(stmt, IfStmt):
             ...
         if isinstance(stmt, ForStmt):
             ...
-        if isinstance(stmt, BlockStmt):
-            ...
+        if isinstance(stmt, BlockStmt):         return self._execute_blockstmt(stmt)
+
 
         raise ExecuteError(f"Unsupported statement: {type(stmt).__name__}")
 
+    def _execute_varstmt(self, stmt: VarStmt) -> Any | None:
+        value = None
+
+        if stmt.initializer is not None:
+            value = self._calculate_expr(stmt.initializer)
+
+        self._environment.define(stmt.name, value)
+
+        return value
+
+    def _execute_blockstmt(self, block: BlockStmt):
+
+        previous = self._environment
+        self._environment = Environment(parent=previous)
+
+        try:
+            result = None
+
+            for stmt in block.statements:
+                result = self._execute_stmt(stmt)
+
+            return result
+
+        finally:
+            self._environment = previous
+
     def _calculate_expr(self, expr: Expr) -> RuntimeValue:
-        if isinstance(expr, LiteralExpr):
-            return expr.value
-
-        if isinstance(expr, IdentifierExpr):
-            return expr.name
-
-        if isinstance(expr, ListExpr):
-            return self._calculate_list_expr(expr)
+        if isinstance(expr, LiteralExpr):       return expr.value
+        if isinstance(expr, IdentifierExpr):    return expr.name
+        if isinstance(expr, ListExpr):          return self._calculate_list_expr(expr)
 
         raise ExecuteError(f"Unsupported expression: {type(expr).__name__}")
 
