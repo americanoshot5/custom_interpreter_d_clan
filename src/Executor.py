@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from common import *
-from common import VarStmt
+from common import SetStmt, VarStmt
 from interfaces import *
 from dataclasses import dataclass
 
@@ -55,6 +55,7 @@ class SExpressionExecutor(Executor):
         if isinstance(stmt, ExpressionStmt):    return self._execute_expr(stmt.expression)
         if isinstance(stmt, PrintStmt):         return self._execute_printstmt(stmt.expression)
         if isinstance(stmt, VarStmt):           return self._execute_varstmt(stmt)
+        if isinstance(stmt, SetStmt):           return self._execute_setstmt(stmt)
         if isinstance(stmt, IfStmt):            return self._execute_ifstmt(stmt)
         if isinstance(stmt, ForStmt):           return self._execute_forstmt(stmt)
         if isinstance(stmt, BlockStmt):         return self._execute_blockstmt(stmt)
@@ -69,11 +70,25 @@ class SExpressionExecutor(Executor):
     def _execute_ifstmt(self, stmt: IfStmt) -> RuntimeValue:
         if self._execute_expr(stmt.condition):
             return self._execute_stmt(stmt.then_branch)
-        else:
+        elif stmt.else_branch is not None:
             return self._execute_stmt(stmt.else_branch)
+        return None
 
     def _execute_forstmt(self, stmt: ForStmt) -> RuntimeValue:
-        ...
+        start = int(self._execute_expr(stmt.start))
+        end = int(self._execute_expr(stmt.end))
+
+        previous = self._environment
+        self._environment = Environment(parent=previous)
+
+        try:
+            result = None
+            for i in range(start, end):
+                self._environment.define(stmt.iterator, i)
+                result = self._execute_stmt(stmt.body)
+            return result
+        finally:
+            self._environment = previous
 
     def _execute_varstmt(self, stmt: VarStmt) -> Any | None:
         value = None
@@ -84,6 +99,11 @@ class SExpressionExecutor(Executor):
         self._environment.define(stmt.name, value)
 
         return stmt.name
+
+    def _execute_setstmt(self, stmt: SetStmt) -> RuntimeValue:
+        value = self._execute_expr(stmt.value)
+        self._environment.assign(stmt.target, value)
+        return value
 
     def _execute_blockstmt(self, block: BlockStmt):
 
@@ -117,38 +137,42 @@ class SExpressionExecutor(Executor):
         operator = self._execute_expr(expr.elements[0])
         operands = [self._execute_expr(arg) for arg in expr.elements[1:]]
 
-        match operator:
-            case "+":
-                if len(operands) == 1:  return operands[0]
-                return operands[0] + operands[1]
+        try:
+            match operator:
+                case "+":
+                    if len(operands) == 1:  return operands[0]
+                    return operands[0] + operands[1]
 
-            case "-":
-                if len(operands) == 1:  return -operands[0]
-                return operands[0] - operands[1]
+                case "-":
+                    if len(operands) == 1:  return -operands[0]
+                    return operands[0] - operands[1]
 
-            case "*":
-                if len(operands) == 1:  raise ExecuteError("'*' expects exactly two operands")
-                return operands[0] * operands[1]
+                case "*":
+                    if len(operands) == 1:  raise ExecuteError("'*' expects exactly two operands")
+                    return operands[0] * operands[1]
 
-            case "/":
-                if len(operands) == 1:  raise ExecuteError("'/' expects exactly two operands")
-                if operands[1] == 0:    raise ZeroDivisionError("Division by zero")
-                return operands[0] / operands[1]
+                case "/":
+                    if len(operands) == 1:  raise ExecuteError("'/' expects exactly two operands")
+                    if operands[1] == 0:    raise ZeroDivisionError("Division by zero")
+                    return operands[0] / operands[1]
 
-            case "<":
-                if len(operands) == 1:  raise ExecuteError("'<' expects exactly two operands")
-                return operands[0] < operands[1]
+                case "<":
+                    if len(operands) == 1:  raise ExecuteError("'<' expects exactly two operands")
+                    return operands[0] < operands[1]
 
-            case ">":
-                if len(operands) == 1:  raise ExecuteError("'>' expects exactly two operands")
-                return operands[0] > operands[1]
+                case ">":
+                    if len(operands) == 1:  raise ExecuteError("'>' expects exactly two operands")
+                    return operands[0] > operands[1]
 
-            case "!":
-                if len(operands) == 2: raise ExecuteError("'!' expects exactly one operand")
-                return not operands[0]
+                case "!":
+                    if len(operands) == 2: raise ExecuteError("'!' expects exactly one operand")
+                    return not operands[0]
 
-            case _:
-                raise ExecuteError(f"Unsupported operator")
+                case _:
+                    raise ExecuteError(f"Unsupported operator")
+
+        except TypeError as e:
+            raise ExecuteError(str(e)) from e
 
 
 DefaultExecutor = SExpressionExecutor
@@ -159,4 +183,3 @@ def execute(program: Program) -> RuntimeValue:
 
 
 __all__ = ["DefaultExecutor", "SExpressionExecutor", "execute"]
-

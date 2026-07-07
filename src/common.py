@@ -29,6 +29,7 @@ class TokenType(str, Enum):
     IF = "if"
     ELSE = "else"
     FOR = "for"
+    SET = "set!"
     TRUE = "true"
     FALSE = "false"
     AND = "and"
@@ -43,6 +44,7 @@ KEYWORDS: dict[str, TokenType] = {
     "if": TokenType.IF,
     "else": TokenType.ELSE,
     "for": TokenType.FOR,
+    "set!": TokenType.SET,
     "true": TokenType.TRUE,
     "false": TokenType.FALSE,
     "and": TokenType.AND,
@@ -131,6 +133,12 @@ class VarStmt(Stmt):
 
 
 @dataclass(frozen=True, slots=True)
+class SetStmt(Stmt):
+    target: str
+    value: Expr
+
+
+@dataclass(frozen=True, slots=True)
 class PrintStmt(Stmt):
     expression: Expr
 
@@ -202,7 +210,9 @@ __all__ = [
     "PrintStmt",
     "Program",
     "RuntimeValue",
+    "SetStmt",
     "SINGLE_CHAR_TOKENS",
+    "SINGLE_INVALID_CHAR_TOKENS",
     "SourceLocation",
     "Stmt",
     "Token",
