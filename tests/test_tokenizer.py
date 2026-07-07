@@ -143,3 +143,18 @@ def test_tokenize_invalid_rbraceidentifier():
     assert tokens[5].type == TokenType.RIGHT_PAREN
     assert tokens[6].type == TokenType.LEFT_BRACE
     assert tokens[11].type == TokenType.RIGHT_BRACE
+
+def test_tokenize_var_assign():
+    src = SExpressionTokenizer("var a 10")
+    tokens = src.tokenize()
+    assert tokens[0].type == TokenType.VAR
+    assert tokens[1].type == TokenType.IDENTIFIER
+    assert tokens[2].type == TokenType.NUMBER
+
+def test_tokenize_floating_point():
+    src = SExpressionTokenizer("(print 3.14)")
+    tokens = src.tokenize()
+    assert tokens[1].type == TokenType.PRINT
+    assert tokens[2].type == TokenType.NUMBER
+    assert tokens[2].literal == 3.14
+    assert tokens[3].type == TokenType.RIGHT_PAREN
