@@ -26,38 +26,42 @@ class SExpressionAssembler(Assembler):
         statements: list[ExpressionStmt] = []
         while not self._is_at_end():
             expr = self._expression()
-            if isinstance(expr, Stmt):
-                loc = expr.location
-                loc_str = f"{loc.line}:{loc.column}" if loc is not None else "unknown"
-                raise AssembleError(f"Statement cannot be used as expression at {loc_str}")
+            self._assert_expr(expr)
             statements.append(ExpressionStmt(expr))
-
         return Program(tuple(statements))
 
     def _expression(self) -> Expr:
         token = self._advance()
-
         if token.type is TokenType.LEFT_PAREN:
-            elements: list[Expr] = []
-            while not self._check(TokenType.RIGHT_PAREN):
-                if self._is_at_end():
-                    raise AssembleError(f"Missing ')' for list opened at {token.location.line}:{token.location.column}")
-                child = self._expression()
-                if isinstance(child, Stmt):
-                    loc = child.location
-                    loc_str = f"{loc.line}:{loc.column}" if loc is not None else "unknown"
-                    raise AssembleError(f"Statement cannot be used as expression at {loc_str}")
-                elements.append(child)
-            self._consume(TokenType.RIGHT_PAREN, "Expected ')' after S-expression")
-            return ListExpr(tuple(elements), location=token.location)
+            return self._parse_list(token)
+        return self._parse_atom(token)
 
+    def _parse_list(self, open_paren: Token) -> ListExpr:
+        elements: list[Expr] = []
+        while not self._check(TokenType.RIGHT_PAREN):
+            if self._is_at_end():
+                raise AssembleError(
+                    f"Missing ')' for list opened at "
+                    f"{open_paren.location.line}:{open_paren.location.column}"
+                )
+            child = self._expression()
+            self._assert_expr(child)
+            elements.append(child)
+        self._consume(TokenType.RIGHT_PAREN, "Expected ')' after S-expression")
+        return ListExpr(tuple(elements), location=open_paren.location)
+
+    def _parse_atom(self, token: Token) -> Expr:
         if token.type is TokenType.RIGHT_PAREN:
             raise AssembleError(f"Unexpected ')' at {token.location.line}:{token.location.column}")
-
         if token.type in {TokenType.NUMBER, TokenType.STRING, TokenType.TRUE, TokenType.FALSE}:
             return LiteralExpr(token.literal, location=token.location)
-
         return IdentifierExpr(token.lexeme, location=token.location)
+
+    def _assert_expr(self, node: Expr) -> None:
+        if isinstance(node, Stmt):
+            loc = node.location
+            loc_str = f"{loc.line}:{loc.column}" if loc is not None else "unknown"
+            raise AssembleError(f"Statement cannot be used as expression at {loc_str}")
 
     def _consume(self, token_type: TokenType, message: str) -> Token:
         if self._check(token_type):
