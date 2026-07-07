@@ -61,8 +61,10 @@ class SExpressionExecutor(Executor):
 
         raise ExecuteError(f"Unsupported statement: {type(stmt).__name__}")
 
-    def _execute_printstmt(self, stmt: PrintStmt) -> RuntimeValue:
-        ...
+    def _execute_printstmt(self, expr: Expr) -> RuntimeValue:
+        value = self._execute_expr(expr)
+        print(value)
+        return None
 
     def _execute_varstmt(self, stmt: VarStmt) -> Any | None:
         value = None

@@ -2,6 +2,7 @@ import pytest
 from common import *
 from Executor import *
 
+
 def test_calculate_error_division_by_zero():
     program = Program(
         (ExpressionStmt(ListExpr((IdentifierExpr("/"), LiteralExpr(6), LiteralExpr(0)))),)
@@ -93,6 +94,16 @@ def test_calculate_nested_arithmetic2():
         (ExpressionStmt(ListExpr((IdentifierExpr("+"), inner1, inner3))),)
     )
     assert execute(program) == 8.0
+
+def test_execute_printstmt(capsys):
+    program = Program(
+        (PrintStmt(ListExpr((IdentifierExpr("+"), LiteralExpr(1), LiteralExpr(2)))),)
+    )
+
+    execute(program)
+    captured = capsys.readouterr()
+
+    assert captured.out == "3\n"
 
 def test_execute_varstmt():
     program = Program(
