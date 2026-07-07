@@ -186,6 +186,82 @@ def test_for_loop_prints_range(capsys):
     assert capsys.readouterr().out.splitlines() == ["0", "1", "2"]
 
 
+def test_for_loop_reassigns_variable_with_set(capsys):
+    source = """
+    (var total 0)
+    (for i 0 5 (set! total (+ total i)))
+    (print total)
+    """
+    _run(source)
+    assert capsys.readouterr().out.strip() == "10.0"
+
+
+def test_nested_for_loop_reassigns_variable_with_set(capsys):
+    source = """
+    (var count 0)
+    (for i 0 3
+      (for j 0 3
+        (set! count (+ count 1))))
+    (print count)
+    """
+    _run(source)
+    assert capsys.readouterr().out.strip() == "9.0"
+
+
+def test_for_loop_declares_new_variable_from_outer_each_iteration(capsys):
+    # 외부에서 선언한 a 를 for 문 내부에서 매 반복마다 var 로 새로 참조해
+    # b 를 선언한다. for 바디는 매 반복마다 새 스코프이므로 "already declared"
+    # 에러 없이 매번 (var b (+ a 2)) 가 성공해야 한다.
+    source = """
+    (var a 1)
+    (for i 0 3
+      { (var b (+ a 2)) (print b) })
+    """
+    _run(source)
+    assert capsys.readouterr().out.splitlines() == ["3.0", "3.0", "3.0"]
+
+
+def test_for_loop_repeatedly_sets_variable_from_outer_and_it_persists_after_loop(capsys):
+    # b 는 for 문 밖에서 선언하고, for 문을 도는 동안 매 반복마다 외부 변수 a 의
+    # 값으로 b 를 계속 갱신한다(var 로 매 반복 재선언하면 for 스코프 안에 갇혀
+    # 루프가 끝난 뒤 사라지므로, 여기서는 set! 로 갱신해 루프 종료 후에도
+    # b 가 유지되는지 확인한다).
+    source = """
+    (var a 3)
+    (var b 0)
+    (for i 0 5 (set! b a))
+    (print b)
+    """
+    _run(source)
+    assert capsys.readouterr().out.strip() == "3.0"
+
+
+def test_for_body_declared_variable_is_undefined_outside_for_scope():
+    # for 문 내부(반복자와 같은 스코프)에서 var 로 새로 선언한 a 는
+    # for 문이 끝나면 스코프에서 사라진다. for 문 밖에서 a 를 참조하면
+    # "Undefined variable" CheckError 가 발생해야 한다.
+    source = """
+    (for i 0 3
+      (var a i))
+    (print a)
+    """
+    with pytest.raises(CheckError, match="Undefined variable"):
+        _run(source)
+
+
+def test_for_loop_reassigns_two_variables_with_set(capsys):
+    source = """
+    (var sum 0)
+    (var count 0)
+    (for i 0 5
+      { (set! sum (+ sum i)) (set! count (+ count 1)) })
+    (print sum)
+    (print count)
+    """
+    _run(source)
+    assert capsys.readouterr().out.splitlines() == ["10.0", "5.0"]
+
+
 # ============================================================
 # 2-1. 구문 에러 (Assembler 단계에서 검출)
 # ============================================================
