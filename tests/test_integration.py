@@ -186,6 +186,41 @@ def test_for_loop_prints_range(capsys):
     assert capsys.readouterr().out.splitlines() == ["0", "1", "2"]
 
 
+def test_for_loop_reassigns_variable_with_set(capsys):
+    source = """
+    (var total 0)
+    (for i 0 5 (set! total (+ total i)))
+    (print total)
+    """
+    _run(source)
+    assert capsys.readouterr().out.strip() == "10.0"
+
+
+def test_nested_for_loop_reassigns_variable_with_set(capsys):
+    source = """
+    (var count 0)
+    (for i 0 3
+      (for j 0 3
+        (set! count (+ count 1))))
+    (print count)
+    """
+    _run(source)
+    assert capsys.readouterr().out.strip() == "9.0"
+
+
+def test_for_loop_reassigns_two_variables_with_set(capsys):
+    source = """
+    (var sum 0)
+    (var count 0)
+    (for i 0 5
+      { (set! sum (+ sum i)) (set! count (+ count 1)) })
+    (print sum)
+    (print count)
+    """
+    _run(source)
+    assert capsys.readouterr().out.splitlines() == ["10.0", "5.0"]
+
+
 # ============================================================
 # 2-1. 구문 에러 (Assembler 단계에서 검출)
 # ============================================================
