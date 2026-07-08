@@ -188,6 +188,10 @@ def test_execute_import_defines_module_and_reads_variable(tmp_path):
     program = Program((
         ImportStmt(path=LiteralExpr(str(lib)), alias="m"),
         ExpressionStmt(DotExpr(obj=IdentifierExpr("m"), slot="answer", args=())),
+    ))
+    assert execute(program) == 42.0
+
+
 def test_execute_funcstmt(capsys):
     func_name = "add"
     func_params = ("a","b")
@@ -277,6 +281,11 @@ def test_execute_dot_expr_missing_module_member_raises(tmp_path):
     program = Program((
         ImportStmt(path=LiteralExpr(str(lib)), alias="m"),
         ExpressionStmt(DotExpr(obj=IdentifierExpr("m"), slot="missing", args=())),
+    ))
+    with pytest.raises(ExecuteError):
+        execute(program)
+
+
 def test_execute_func_implicit_none_return():
     program = Program((
         FuncDefStmt(
@@ -326,6 +335,8 @@ def test_execute_dot_expr_calling_non_function_member_raises(tmp_path):
     ))
     with pytest.raises(ExecuteError):
         execute(program)
+
+
 def test_execute_func_too_many_args_raises():
     program = Program((
         FuncDefStmt(
