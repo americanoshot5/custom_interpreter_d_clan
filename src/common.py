@@ -11,6 +11,8 @@ class TokenType(str, Enum):
     RIGHT_PAREN = ")"
     LEFT_BRACE = "{"
     RIGHT_BRACE = "}"
+    LEFT_BRACKET = "["
+    RIGHT_BRACKET = "]"
     SEMICOLON = ";"
 
     PLUS = "+"
@@ -60,6 +62,8 @@ SINGLE_CHAR_TOKENS: dict[str, TokenType] = {
     ")": TokenType.RIGHT_PAREN,
     "{": TokenType.LEFT_BRACE,
     "}": TokenType.RIGHT_BRACE,
+    "[": TokenType.LEFT_BRACKET,
+    "]": TokenType.RIGHT_BRACKET,
     ";": TokenType.SEMICOLON,
     "+": TokenType.PLUS,
     "-": TokenType.MINUS,
@@ -131,6 +135,15 @@ class ListExpr(Expr):
     elements: tuple[Expr, ...]
 
 @dataclass(frozen=True, slots=True)
+class ArrayExpr(Expr):
+    size: Expr
+
+@dataclass(frozen=True, slots=True)
+class ArrayIndexExpr(Expr):
+    array: Expr
+    index: Expr
+
+@dataclass(frozen=True, slots=True)
 class ExpressionStmt(Stmt):
     expression: Expr
 
@@ -200,6 +213,8 @@ RuntimeValue = Any
 
 
 __all__ = [
+    "ArrayExpr",
+    "ArrayIndexExpr",
     "AssembleError",
     "BUILTIN_OPS",
     "BlockStmt",
