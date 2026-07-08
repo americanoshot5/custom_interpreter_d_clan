@@ -30,6 +30,18 @@ def test_tokenize_string_literal():
     assert string_token.literal == "hi"
 
 
+def test_tokenize_tracks_line_and_column_locations():
+    src = SExpressionTokenizer("\n(print 1)\n  (print 2)")
+    tokens = src.tokenize()
+
+    assert tokens[0].lexeme == "("
+    assert tokens[0].location.line == 2
+    assert tokens[0].location.column == 1
+    assert tokens[4].lexeme == "("
+    assert tokens[4].location.line == 3
+    assert tokens[4].location.column == 3
+
+
 def test_tokenize_boolean_keywords():
     src = SExpressionTokenizer("true false")
     tokens = src.tokenize()
