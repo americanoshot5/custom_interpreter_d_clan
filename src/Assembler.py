@@ -331,9 +331,7 @@ class SExpressionAssembler(Assembler):
         """(obj.method args...) or (Super.method args...) from DOTIDENTIFIER token"""
         tok = self._advance()  # consume DOTIDENTIFIER
         lexeme = tok.lexeme
-        dot_pos = lexeme.index(".")
-        obj_name = lexeme[:dot_pos]
-        method_name = lexeme[dot_pos + 1:]
+        obj_name, method_name = self._split_dot_identifier(lexeme)
 
         args: list[Expr] = []
         while not self._check(TokenType.RIGHT_PAREN):
@@ -484,7 +482,20 @@ class SExpressionAssembler(Assembler):
             raise AssembleError(f"Unexpected ']' at {token.location.line}:{token.location.column}")
         if token.type in {TokenType.NUMBER, TokenType.STRING, TokenType.TRUE, TokenType.FALSE}:
             return LiteralExpr(token.literal, location=token.location)
+        if token.type is TokenType.DOTIDENTIFIER:
+            obj_name, slot_name = self._split_dot_identifier(token.lexeme)
+            return DotExpr(
+                obj=IdentifierExpr(obj_name, location=token.location),
+                slot=slot_name,
+                args=(),
+                location=token.location,
+            )
         return IdentifierExpr(token.lexeme, location=token.location)
+
+    @staticmethod
+    def _split_dot_identifier(lexeme: str) -> tuple[str, str]:
+        dot_pos = lexeme.index(".")
+        return lexeme[:dot_pos], lexeme[dot_pos + 1:]
 
     def _assert_expr(self, node: Expr) -> None:
         if isinstance(node, Stmt):

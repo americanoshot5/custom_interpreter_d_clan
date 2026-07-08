@@ -15,6 +15,7 @@ import pytest
 from common import (
     AssembleError,
     BlockStmt,
+    DotExpr,
     ExpressionStmt,
     ForStmt,
     IdentifierExpr,
@@ -324,6 +325,20 @@ def test_operator_plus_becomes_identifier():
     expr = unwrap([tok(TokenType.PLUS, "+"), eof()])
     assert isinstance(expr, IdentifierExpr)
     assert expr.name == "+"
+
+
+def test_dotidentifier_atom_becomes_dot_expr():
+    """호출 위치가 아닌 곳의 obj.slot 도 DotExpr 로 분해되어야 한다."""
+    from common import DotExpr
+
+    expr = unwrap(
+        [tok(TokenType.DOTIDENTIFIER, "sum.answer", literal="sum.answer"), eof()]
+    )
+    assert isinstance(expr, DotExpr)
+    assert isinstance(expr.obj, IdentifierExpr)
+    assert expr.obj.name == "sum"
+    assert expr.slot == "answer"
+    assert expr.args == ()
 
 
 # ============================================================
