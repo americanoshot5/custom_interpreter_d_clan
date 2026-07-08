@@ -8,6 +8,8 @@ from common import (
     ArrayIndexExpr,
     AssembleError,
     BlockStmt,
+    ClassStmt,
+    DotExpr,
     Expr,
     ExpressionStmt,
     ForStmt,
@@ -16,11 +18,15 @@ from common import (
     IfStmt,
     ListExpr,
     LiteralExpr,
+    MethodDef,
+    NewExpr,
     PrintStmt,
     Program,
     ReturnStmt,
     SetStmt,
+    SourceLocation,
     Stmt,
+    SuperExpr,
     Token,
     TokenType,
     VarStmt,
@@ -30,7 +36,7 @@ from interfaces import Assembler
 
 class SExpressionAssembler(Assembler):
 
-    # 새로운 special form 추가 시: 이 테이블에 한 줄 + 파서 메서드 하나만 추가하면 됩니다.
+    # 새로운 special form(문) 추가 시: 이 테이블에 한 줄 + 파서 메서드 하나만 추가하면 됩니다.
     _SPECIAL_FORMS: ClassVar[dict[TokenType, str]] = {
         TokenType.VAR:    "_parse_var_stmt",
         TokenType.SET:    "_parse_set_stmt",
@@ -39,6 +45,14 @@ class SExpressionAssembler(Assembler):
         TokenType.FOR:    "_parse_for_stmt",
         TokenType.FUNC:   "_parse_func_stmt",
         TokenType.RETURN: "_parse_return_stmt",
+        TokenType.CLASS: "_parse_class_stmt",
+    }
+
+    # 새로운 expression special form 추가 시: 이 테이블에 한 줄 + 파서 메서드 하나만 추가하면 됩니다.
+    _EXPR_FORMS: ClassVar[dict[TokenType, str]] = {
+        TokenType.NEW:   "_parse_new_expr",
+        TokenType.DOT:   "_parse_dot_expr",
+        TokenType.SUPER: "_parse_super_expr",
     }
 
     def __init__(self, tokens: Sequence[Token]) -> None:
@@ -77,10 +91,12 @@ class SExpressionAssembler(Assembler):
 
     def _parse_list_stmt(self) -> Stmt:
         open_paren = self._advance()  # consume '('
-        method_name = self._SPECIAL_FORMS.get(self._peek().type)
-        if method_name:
-            return getattr(self, method_name)(open_paren)
-        return ExpressionStmt(self._parse_list(open_paren))
+        stmt_method = self._SPECIAL_FORMS.get(self._peek().type)
+        if stmt_method:
+            return getattr(self, stmt_method)(open_paren)
+        # 나머지는 표현식으로 파싱 (_EXPR_FORMS 포함)
+        expr = self._parse_list(open_paren)
+        return ExpressionStmt(expr)
 
     def _parse_set_stmt(self, open_paren: Token) -> SetStmt:
         self._advance()  # consume 'set!'
@@ -91,7 +107,7 @@ class SExpressionAssembler(Assembler):
                 f"{target_token.location.line}:{target_token.location.column}: "
                 f"assignment target must be a variable name"
             )
-        self._advance()  # consume the identifier
+        self._advance()
         value = self._expression()
         self._consume(TokenType.RIGHT_PAREN, "Expected ')' to close set! statement")
         return SetStmt(target=target_token.lexeme, value=value, location=open_paren.location)
@@ -170,6 +186,92 @@ class SExpressionAssembler(Assembler):
         self._consume(TokenType.RIGHT_PAREN, "Expected ')' to close return statement")
         return ReturnStmt(value=value, location=open_paren.location)
 
+    def _parse_class_stmt(self, open_paren: Token) -> ClassStmt:
+        self._advance()  # consume 'class'
+        name_token = self._advance()
+        if name_token.type is TokenType.RIGHT_PAREN or name_token.type is TokenType.EOF:
+            raise AssembleError(
+                f"Expected class name at {name_token.location.line}:{name_token.location.column}"
+            )
+        class_name = name_token.lexeme
+
+        # 선택적 부모 클래스: 다음 토큰이 IDENTIFIER 이면 부모 이름
+        parent_name: str | None = None
+        if self._peek().type is TokenType.IDENTIFIER:
+            parent_name = self._advance().lexeme
+
+        # 클래스 본문: (field ...) 또는 (method ...) 반복
+        fields: list[str] = []
+        methods: list[MethodDef] = []
+
+        while not self._check(TokenType.RIGHT_PAREN):
+            if self._is_at_end():
+                raise AssembleError(
+                    f"Missing ')' for class '{class_name}' opened at "
+                    f"{open_paren.location.line}:{open_paren.location.column}"
+                )
+            if not self._check(TokenType.LEFT_PAREN):
+                tok = self._peek()
+                raise AssembleError(
+                    f"Expected '(' in class body at {tok.location.line}:{tok.location.column}"
+                )
+            self._advance()  # consume '('
+
+            member_type = self._peek().type
+            if member_type is TokenType.FIELD:
+                self._advance()  # consume 'field'
+                fname = self._advance()
+                fields.append(fname.lexeme)
+                self._consume(TokenType.RIGHT_PAREN, "Expected ')' after field name")
+            elif member_type is TokenType.METHOD:
+                methods.append(self._parse_method_def())
+            else:
+                tok = self._peek()
+                raise AssembleError(
+                    f"Expected 'field' or 'method' in class body at "
+                    f"{tok.location.line}:{tok.location.column}"
+                )
+
+        self._consume(TokenType.RIGHT_PAREN, f"Expected ')' to close class '{class_name}'")
+        return ClassStmt(
+            name=class_name,
+            parent=parent_name,
+            fields=tuple(fields),
+            methods=tuple(methods),
+            location=open_paren.location,
+        )
+
+    def _parse_method_def(self) -> MethodDef:
+        method_kw = self._advance()  # consume 'method'
+        loc = method_kw.location
+
+        # 메서드 시그니처: (methodName param1 param2 ...)
+        self._consume(TokenType.LEFT_PAREN, "Expected '(' for method signature")
+        name_tok = self._advance()
+        method_name = name_tok.lexeme
+
+        params: list[str] = []
+        while not self._check(TokenType.RIGHT_PAREN):
+            if self._is_at_end():
+                raise AssembleError("Missing ')' in method signature")
+            params.append(self._advance().lexeme)
+        self._consume(TokenType.RIGHT_PAREN, "Expected ')' to close method signature")
+
+        # 메서드 본문: 문(Stmt) 목록
+        body: list[Stmt] = []
+        while not self._check(TokenType.RIGHT_PAREN):
+            if self._is_at_end():
+                raise AssembleError(f"Missing ')' to close method '{method_name}'")
+            body.append(self._statement())
+        self._consume(TokenType.RIGHT_PAREN, f"Expected ')' to close method '{method_name}'")
+
+        return MethodDef(
+            name=method_name,
+            params=tuple(params),
+            body=tuple(body),
+            location=loc,
+        )
+
     # ── Expression parsers ───────────────────────────────────────────────────
 
     def _expression(self) -> Expr:
@@ -194,7 +296,13 @@ class SExpressionAssembler(Assembler):
         self._consume(TokenType.RIGHT_BRACKET, "Expected ']' to close array literal")
         return ArrayExpr(size=size, location=open_bracket.location)
 
-    def _parse_list(self, open_paren: Token) -> ListExpr:
+    def _parse_list(self, open_paren: Token) -> Expr:
+        # expression-level special forms (new / . / super)
+        expr_method = self._EXPR_FORMS.get(self._peek().type)
+        if expr_method:
+            return getattr(self, expr_method)(open_paren)
+
+        # 일반 ListExpr
         elements: list[Expr] = []
         while not self._check(TokenType.RIGHT_PAREN):
             if self._is_at_end():
@@ -207,6 +315,49 @@ class SExpressionAssembler(Assembler):
             elements.append(child)
         self._consume(TokenType.RIGHT_PAREN, "Expected ')' after S-expression")
         return ListExpr(tuple(elements), location=open_paren.location)
+
+    def _parse_new_expr(self, open_paren: Token) -> NewExpr:
+        self._advance()  # consume 'new'
+        name_tok = self._advance()
+        class_name = name_tok.lexeme
+        args: list[Expr] = []
+        while not self._check(TokenType.RIGHT_PAREN):
+            if self._is_at_end():
+                raise AssembleError("Missing ')' in new expression")
+            args.append(self._expression())
+        self._consume(TokenType.RIGHT_PAREN, "Expected ')' to close new expression")
+        return NewExpr(class_name=class_name, args=tuple(args), location=open_paren.location)
+
+    def _parse_dot_expr(self, open_paren: Token) -> DotExpr:
+        self._advance()  # consume '.'
+        obj = self._expression()
+        # 슬롯 이름: 키워드도 허용 (예: method named 'init')
+        slot_tok = self._advance()
+        if slot_tok.type in {TokenType.RIGHT_PAREN, TokenType.EOF}:
+            raise AssembleError(
+                f"Expected slot name in dot expression at "
+                f"{slot_tok.location.line}:{slot_tok.location.column}"
+            )
+        slot = slot_tok.lexeme
+        args: list[Expr] = []
+        while not self._check(TokenType.RIGHT_PAREN):
+            if self._is_at_end():
+                raise AssembleError("Missing ')' in dot expression")
+            args.append(self._expression())
+        self._consume(TokenType.RIGHT_PAREN, "Expected ')' to close dot expression")
+        return DotExpr(obj=obj, slot=slot, args=tuple(args), location=open_paren.location)
+
+    def _parse_super_expr(self, open_paren: Token) -> SuperExpr:
+        self._advance()  # consume 'super'
+        method_tok = self._advance()
+        method_name = method_tok.lexeme
+        args: list[Expr] = []
+        while not self._check(TokenType.RIGHT_PAREN):
+            if self._is_at_end():
+                raise AssembleError("Missing ')' in super expression")
+            args.append(self._expression())
+        self._consume(TokenType.RIGHT_PAREN, "Expected ')' to close super expression")
+        return SuperExpr(method=method_name, args=tuple(args), location=open_paren.location)
 
     def _parse_atom(self, token: Token) -> Expr:
         if token.type is TokenType.RIGHT_PAREN:

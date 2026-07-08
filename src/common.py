@@ -22,6 +22,7 @@ class TokenType(str, Enum):
     EQUAL = "="
     GREATER = ">"
     LESS = "<"
+    DOT = "."
 
     IDENTIFIER = "IDENTIFIER"
     DOTIDENTIFIER = "DOTIDENTIFIER"
@@ -41,6 +42,12 @@ class TokenType(str, Enum):
     FUNC = "func"
     RETURN = "return"
 
+    CLASS = "class"
+    FIELD = "field"
+    METHOD = "method"
+    NEW = "new"
+    SUPER = "super"
+
     NOT = "~"
     EOF = "EOF"
     NULL = "Null"
@@ -59,6 +66,11 @@ KEYWORDS: dict[str, TokenType] = {
     "null": TokenType.NULL,
     "func": TokenType.FUNC,
     "return": TokenType.RETURN,
+    "class": TokenType.CLASS,
+    "field": TokenType.FIELD,
+    "method": TokenType.METHOD,
+    "new": TokenType.NEW,
+    "super": TokenType.SUPER,
 }
 
 SINGLE_CHAR_TOKENS: dict[str, TokenType] = {
@@ -77,6 +89,7 @@ SINGLE_CHAR_TOKENS: dict[str, TokenType] = {
     ">": TokenType.GREATER,
     "<": TokenType.LESS,
     "~": TokenType.NOT,
+    ".": TokenType.DOT,
 }
 
 SINGLE_INVALID_CHAR_TOKENS: dict[str, str] = {
@@ -127,6 +140,8 @@ class Stmt(Node, ABC):
     """Base class shared by statement nodes."""
 
 
+# ── Expression nodes ─────────────────────────────────────────────────────────
+
 @dataclass(frozen=True, slots=True)
 class LiteralExpr(Expr):
     value: LiteralValue
@@ -148,6 +163,31 @@ class ArrayIndexExpr(Expr):
     array: Expr
     index: Expr
 
+class NewExpr(Expr):
+    """(new ClassName args...)"""
+    class_name: str
+    args: tuple[Expr, ...]
+
+@dataclass(frozen=True, slots=True)
+class DotExpr(Expr):
+    """(. obj slot) or (. obj slot arg...)
+    - No args:  read field or call zero-arg method
+    - One arg + slot is a field:  write field
+    - Args + slot is a method:  call method
+    """
+    obj: Expr
+    slot: str
+    args: tuple[Expr, ...]
+
+@dataclass(frozen=True, slots=True)
+class SuperExpr(Expr):
+    """(super methodName args...)"""
+    method: str
+    args: tuple[Expr, ...]
+
+
+# ── Statement nodes ───────────────────────────────────────────────────────────
+
 @dataclass(frozen=True, slots=True)
 class ExpressionStmt(Stmt):
     expression: Expr
@@ -157,29 +197,24 @@ class VarStmt(Stmt):
     name: str
     initializer: Expr | None = None
 
-
 @dataclass(frozen=True, slots=True)
 class SetStmt(Stmt):
     target: str
     value: Expr
 
-
 @dataclass(frozen=True, slots=True)
 class PrintStmt(Stmt):
     expression: Expr
 
-
 @dataclass(frozen=True, slots=True)
 class BlockStmt(Stmt):
     statements: tuple[Stmt, ...]
-
 
 @dataclass(frozen=True, slots=True)
 class IfStmt(Stmt):
     condition: Expr
     then_branch: Stmt
     else_branch: Stmt | None = None
-
 
 @dataclass(frozen=True, slots=True)
 class ForStmt(Stmt):
@@ -188,6 +223,27 @@ class ForStmt(Stmt):
     end: Expr
     body: Stmt
 
+
+# ── Class-related nodes ───────────────────────────────────────────────────────
+
+@dataclass(frozen=True, slots=True)
+class MethodDef:
+    """Method definition inside a class body. Not a Stmt — contained by ClassStmt."""
+    name: str
+    params: tuple[str, ...]
+    body: tuple[Stmt, ...]
+    location: SourceLocation | None = None
+
+@dataclass(frozen=True, slots=True)
+class ClassStmt(Stmt):
+    """(class Name [Parent] (field ...) ... (method ...) ...)"""
+    name: str
+    parent: str | None
+    fields: tuple[str, ...]
+    methods: tuple[MethodDef, ...]
+
+
+# ── Program root ──────────────────────────────────────────────────────────────
 
 @dataclass(frozen=True, slots=True)
 class FuncDefStmt(Stmt):
@@ -206,21 +262,19 @@ class Program:
     statements: tuple[Stmt, ...]
 
 
+# ── Error hierarchy ───────────────────────────────────────────────────────────
+
 class LanguageError(Exception):
     """Base exception for interpreter pipeline errors."""
-
 
 class TokenizeError(LanguageError):
     pass
 
-
 class AssembleError(LanguageError):
     pass
 
-
 class CheckError(LanguageError):
     pass
-
 
 class ExecuteError(LanguageError):
     pass
@@ -236,6 +290,8 @@ __all__ = [
     "BUILTIN_OPS",
     "BlockStmt",
     "CheckError",
+    "ClassStmt",
+    "DotExpr",
     "ExecuteError",
     "Expr",
     "ExpressionStmt",
@@ -248,6 +304,8 @@ __all__ = [
     "ListExpr",
     "LiteralExpr",
     "LiteralValue",
+    "MethodDef",
+    "NewExpr",
     "Node",
     "PrintStmt",
     "Program",
@@ -258,6 +316,7 @@ __all__ = [
     "SINGLE_INVALID_CHAR_TOKENS",
     "SourceLocation",
     "Stmt",
+    "SuperExpr",
     "Token",
     "TokenType",
     "TokenizeError",

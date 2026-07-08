@@ -2,14 +2,11 @@ from __future__ import annotations
 
 import operator as _op
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
 from common import *
-
-from common import ArrayExpr, ArrayIndexExpr, BUILTIN_OPS, SetStmt, VarStmt
-
 from interfaces import *
-from dataclasses import dataclass
 
 # ── 연산자 테이블 ─────────────────────────────────────────────────────────────
 #
@@ -27,7 +24,7 @@ _BINARY: dict[str, Callable[[RuntimeValue, RuntimeValue], RuntimeValue]] = {
     "+":   _op.add,
     "-":   _op.sub,
     "*":   _op.mul,
-    "/":   _op.truediv,  # ZeroDivisionError은 자연스럽게 전파됩니다
+    "/":   _op.truediv,  # ZeroDivisionError 는 자연스럽게 전파됩니다
     "<":   _op.lt,
     ">":   _op.gt,
     "=":   _op.eq,
@@ -52,7 +49,39 @@ class Function:
 class _ReturnSignal(Exception):
     def __init__(self, value: "RuntimeValue") -> None:
         self.value = value
+# ── 런타임 객체 ───────────────────────────────────────────────────────────────
 
+@dataclass
+class ClassDef:
+    """실행 시간에 클래스를 나타내는 객체."""
+    name: str
+    parent: ClassDef | None
+    field_names: tuple[str, ...]
+    methods: dict[str, MethodDef]
+
+    def get_all_field_names(self) -> list[str]:
+        """상속 계층을 포함한 모든 필드 이름 (부모 → 자식 순서)."""
+        parent_fields = self.parent.get_all_field_names() if self.parent else []
+        own = [f for f in self.field_names if f not in parent_fields]
+        return parent_fields + own
+
+    def lookup_method(self, name: str) -> tuple[MethodDef, ClassDef] | None:
+        """메서드 이름으로 (메서드 정의, 정의된 클래스) 를 반환한다. 없으면 None."""
+        if name in self.methods:
+            return self.methods[name], self
+        if self.parent is not None:
+            return self.parent.lookup_method(name)
+        return None
+
+
+@dataclass
+class ClassInstance:
+    """클래스의 인스턴스."""
+    class_def: ClassDef
+    fields: dict[str, RuntimeValue] = field(default_factory=dict)
+
+    def __repr__(self) -> str:
+        return f"<{self.class_def.name} instance>"
 
 # ── 환경(스코프) ──────────────────────────────────────────────────────────────
 
@@ -98,6 +127,7 @@ class SExpressionExecutor(Executor):
         BlockStmt:      "_execute_blockstmt",
         FuncDefStmt:    "_execute_funcdefstmt",
         ReturnStmt:     "_execute_returnstmt",
+        ClassStmt:      "_execute_classstmt",
     }
 
     def __init__(self):
@@ -193,6 +223,23 @@ class SExpressionExecutor(Executor):
         finally:
             self._environment = previous
 
+    def _execute_classstmt(self, stmt: ClassStmt) -> RuntimeValue:
+        parent_def: ClassDef | None = None
+        if stmt.parent is not None:
+            parent_val = self._environment.lookup(stmt.parent)
+            if not isinstance(parent_val, ClassDef):
+                raise ExecuteError(f"'{stmt.parent}' is not a class")
+            parent_def = parent_val
+
+        class_def = ClassDef(
+            name=stmt.name,
+            parent=parent_def,
+            field_names=stmt.fields,
+            methods={m.name: m for m in stmt.methods},
+        )
+        self._environment.define(stmt.name, class_def)
+        return None
+
     # ── 식(Expr) 평가 ─────────────────────────────────────────────────────────
 
     def _execute_expr(self, expr: Expr) -> RuntimeValue:
@@ -206,6 +253,12 @@ class SExpressionExecutor(Executor):
             return self._execute_array_expr(expr)
         if isinstance(expr, ArrayIndexExpr):
             return self._execute_array_index_expr(expr)
+        if isinstance(expr, NewExpr):
+            return self._execute_new_expr(expr)
+        if isinstance(expr, DotExpr):
+            return self._execute_dot_expr(expr)
+        if isinstance(expr, SuperExpr):
+            return self._execute_super_expr(expr)
         raise ExecuteError(f"Unsupported expression: {type(expr).__name__}")
 
     def _execute_array_expr(self, expr: ArrayExpr) -> RuntimeValue:
@@ -305,6 +358,119 @@ class SExpressionExecutor(Executor):
         value = self._execute_expr(expr.elements[3])
         array[idx] = value
         return value
+
+    # ── OOP 실행 ─────────────────────────────────────────────────────────────
+
+    def _execute_new_expr(self, expr: NewExpr) -> RuntimeValue:
+        class_val = self._environment.lookup(expr.class_name)
+        if not isinstance(class_val, ClassDef):
+            raise ExecuteError(f"'{expr.class_name}' is not a class")
+
+        # 필드를 모두 None 으로 초기화
+        instance = ClassInstance(
+            class_def=class_val,
+            fields={name: None for name in class_val.get_all_field_names()},
+        )
+
+        # init 메서드가 있으면 호출
+        init_result = class_val.lookup_method("init")
+        if init_result is not None:
+            init_def, defining_class = init_result
+            args = [self._execute_expr(a) for a in expr.args]
+            self._call_method(instance, init_def, defining_class, args)
+        elif expr.args:
+            raise ExecuteError(
+                f"Class '{expr.class_name}' has no 'init' method "
+                f"but {len(expr.args)} argument(s) were provided"
+            )
+
+        return instance
+
+    def _execute_dot_expr(self, expr: DotExpr) -> RuntimeValue:
+        obj = self._execute_expr(expr.obj)
+        if not isinstance(obj, ClassInstance):
+            raise ExecuteError(
+                f"'.' operator requires an object, got {type(obj).__name__!r}"
+            )
+
+        args = [self._execute_expr(a) for a in expr.args]
+        slot = expr.slot
+
+        # 메서드 우선 탐색
+        method_result = obj.class_def.lookup_method(slot)
+        if method_result is not None:
+            method_def, defining_class = method_result
+            return self._call_method(obj, method_def, defining_class, args)
+
+        # 필드 처리
+        all_fields = obj.class_def.get_all_field_names()
+        if slot in all_fields:
+            if len(args) == 0:        # 읽기
+                return obj.fields.get(slot)
+            if len(args) == 1:        # 쓰기
+                obj.fields[slot] = args[0]
+                return args[0]
+            raise ExecuteError(
+                f"Field '{slot}' expects 0 (read) or 1 (write) argument(s), got {len(args)}"
+            )
+
+        raise ExecuteError(
+            f"'{obj.class_def.name}' has no field or method '{slot}'"
+        )
+
+    def _execute_super_expr(self, expr: SuperExpr) -> RuntimeValue:
+        # self 와 __class__ 는 메서드 실행 환경에 정의되어 있다
+        try:
+            instance = self._environment.lookup("self")
+            current_class = self._environment.lookup("__class__")
+        except ExecuteError:
+            raise ExecuteError("'super' used outside of a method")
+
+        if not isinstance(instance, ClassInstance):
+            raise ExecuteError("'super' used outside of a method")
+
+        parent = current_class.parent
+        if parent is None:
+            raise ExecuteError(f"Class '{current_class.name}' has no parent class")
+
+        method_result = parent.lookup_method(expr.method)
+        if method_result is None:
+            raise ExecuteError(
+                f"Method '{expr.method}' not found in parent class '{parent.name}'"
+            )
+
+        method_def, defining_class = method_result
+        args = [self._execute_expr(a) for a in expr.args]
+        return self._call_method(instance, method_def, defining_class, args)
+
+    def _call_method(
+        self,
+        instance: ClassInstance,
+        method_def: MethodDef,
+        defining_class: ClassDef,
+        args: list[RuntimeValue],
+    ) -> RuntimeValue:
+        if len(args) != len(method_def.params):
+            raise ExecuteError(
+                f"Method '{method_def.name}' expects {len(method_def.params)} "
+                f"argument(s), got {len(args)}"
+            )
+
+        previous = self._environment
+        self._environment = Environment(parent=previous)
+        # self, __class__ (super 탐색용), 파라미터를 바인딩
+        self._environment.define("self", instance)
+        self._environment.define("__class__", defining_class)
+        for param, val in zip(method_def.params, args):
+            self._environment.define(param, val)
+
+        try:
+            result: RuntimeValue = None
+            for stmt in method_def.body:
+                result = self._execute_stmt(stmt)
+            return result
+        finally:
+            self._environment = previous
 
 
 DefaultExecutor = SExpressionExecutor
