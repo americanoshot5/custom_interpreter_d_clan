@@ -2,6 +2,7 @@ import pytest
 from common import *
 from Executor import *
 from Checker import *
+from Optimizer import StaticBinder
 
 
 def test_calculate_error_division_by_zero():
@@ -453,3 +454,100 @@ class TestStaticBindingExecutor:
 
         assert spy_lookup.call_count == 0     # 바인딩 시 체인 탐색 없음
         assert spy_lookup_at.call_count >= 1  # 직접 접근
+
+
+# ── Optimizer 모듈 + Executor 통합 테스트 ─────────────────────────────────────
+#
+# Optimizer.py 의 고수준 API 를 통해 최적화한 Program 을
+# SExpressionExecutor 로 실행했을 때 올바른 결과를 내는지 검증한다.
+
+from Optimizer import (
+    BindingInfo, BindingTable,
+    fold_constants, optimize, optimization_stats, resolve_bindings,
+)
+
+
+class TestOptimizerExecutorIntegration:
+    """Optimizer API → Executor 실행 통합 테스트."""
+
+    def test_optimize_then_execute_constant_fold(self):
+        """optimize() 로 상수 접기 후 execute() 결과가 일반 실행과 동일하다."""
+        inner = ListExpr((IdentifierExpr("*"), LiteralExpr(2.0), LiteralExpr(3.0)))
+        outer = ListExpr((IdentifierExpr("+"), LiteralExpr(1.0), inner))
+        program = Program((ExpressionStmt(outer),))
+
+        from Executor import execute
+        normal_result = execute(program)
+        optimized = optimize(program)
+        optimized_result = execute(optimized)
+        assert optimized_result == normal_result == pytest.approx(7.0)
+
+    def test_optimize_reduces_list_expr_calls(self, mocker):
+        """optimize() 후 Executor._execute_list_expr 호출 횟수가 줄어든다."""
+        inner = ListExpr((IdentifierExpr("*"), LiteralExpr(3.0), LiteralExpr(4.0)))
+        outer = ListExpr((IdentifierExpr("+"), LiteralExpr(1.0), inner))
+        program = Program((ExpressionStmt(outer),))
+
+        exec_before = SExpressionExecutor()
+        spy_before = mocker.spy(exec_before, "_execute_list_expr")
+        exec_before.execute(program)
+        count_before = spy_before.call_count  # 2 (inner + outer)
+
+        optimized = optimize(program)
+        exec_after = SExpressionExecutor()
+        spy_after = mocker.spy(exec_after, "_execute_list_expr")
+        exec_after.execute(optimized)
+        count_after = spy_after.call_count  # 0
+
+        assert count_after < count_before
+        assert count_after == 0
+
+    def test_resolve_bindings_then_execute_with_static_binding(self):
+        """resolve_bindings() 로 거리 확인, StaticBinder() 로 맵 생성 → Executor 실행."""
+        x_ref = IdentifierExpr("x")
+        program = Program((
+            VarStmt(name="x", initializer=LiteralExpr(99.0)),
+            BlockStmt((BlockStmt((ExpressionStmt(x_ref),)),)),
+        ))
+
+        table = resolve_bindings(program)
+        assert table.lookup("x").distance == 2  # 2단계 위 스코프
+
+        bindings = StaticBinder().bind(program)
+        result = SExpressionExecutor(bindings=bindings).execute(program)
+        assert result == pytest.approx(99.0)
+
+    def test_fold_constants_stats_match_actual_folds(self):
+        """fold_constants() 통계가 실제 접힌 ListExpr 수와 일치한다."""
+        program = Program((
+            ExpressionStmt(ListExpr((
+                IdentifierExpr("+"),
+                LiteralExpr(1.0),
+                ListExpr((IdentifierExpr("*"), LiteralExpr(2.0), LiteralExpr(3.0))),
+            ))),
+        ))
+        folded = fold_constants(program)
+        stats = optimization_stats(folded)
+        # (* 2 3) → 1회, (+ 1 6) → 1회 = 총 2회
+        assert stats["folded_expressions"] == 2
+
+    def test_optimize_with_for_loop_constant_body(self, capsys):
+        """루프 내 상수를 optimize() 로 사전 계산 후 execute() 가 올바른 결과를 낸다."""
+        from Executor import execute
+        # (var sum 0) (for i 0 5 (set! sum (+ sum (* 2 3)))) (print sum)
+        set_sum = SetStmt(
+            target="sum",
+            value=ListExpr((
+                IdentifierExpr("+"),
+                IdentifierExpr("sum"),
+                ListExpr((IdentifierExpr("*"), LiteralExpr(2.0), LiteralExpr(3.0))),
+            )),
+        )
+        program = Program((
+            VarStmt(name="sum", initializer=LiteralExpr(0.0)),
+            ForStmt(iterator="i", start=LiteralExpr(0.0), end=LiteralExpr(5.0), body=set_sum),
+            PrintStmt(IdentifierExpr("sum")),
+        ))
+        optimized = optimize(program)
+        execute(optimized)
+        assert capsys.readouterr().out.strip() == "30.0"

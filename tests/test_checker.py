@@ -35,7 +35,8 @@ from common import (
     Stmt,
     VarStmt,
 )
-from Checker import BindingMap, ConstantFolder, StaticBinder, SExpressionChecker, check
+from Checker import SExpressionChecker, check
+from Optimizer import BindingMap, ConstantFolder, StaticBinder
 
 
 # ── AST 헬퍼 ─────────────────────────────────────────────────────────────────
@@ -880,3 +881,162 @@ class TestConstantFolder:
         folded = ConstantFolder().fold(program)
         assert isinstance(folded.statements[0].condition, LiteralExpr)
         assert folded.statements[0].condition.value is True
+
+
+# ── 12. Optimizer 고수준 API ──────────────────────────────────────────────────
+#
+# src/Optimizer.py 의 공개 함수를 검증한다.
+#
+#   resolve_bindings(program) → BindingTable  (name → distance)
+#   fold_constants(program)   → Program       (상수 접기)
+#   optimization_stats(prog)  → dict          ("folded_expressions" 키)
+#   optimize(program)         → Program       (모든 최적화 적용)
+
+from Optimizer import BindingInfo, BindingTable, fold_constants, optimize, optimization_stats, resolve_bindings
+
+
+class TestResolveBindings:
+    """resolve_bindings() — 이름 기반 스코프 거리 테이블 검증."""
+
+    def test_returns_binding_table(self):
+        """반환값이 BindingTable 인스턴스이다."""
+        result = resolve_bindings(prog(var("x", lit(1.0))))
+        assert isinstance(result, BindingTable)
+
+    def test_variable_same_scope_distance_zero(self):
+        """선언된 스코프와 동일 스코프에서 참조 → distance 0."""
+        program = prog(var("x", lit(1.0)), print_stmt(ident("x")))
+        table = resolve_bindings(program)
+        assert table.lookup("x").distance == 0
+
+    def test_variable_one_scope_up(self):
+        """1단계 위 스코프 변수 → distance 1."""
+        program = prog(var("x", lit(1.0)), block(print_stmt(ident("x"))))
+        table = resolve_bindings(program)
+        assert table.lookup("x").distance == 1
+
+    def test_variable_three_scopes_up(self):
+        """3단계 위 스코프 변수 → distance 3."""
+        program = prog(
+            var("a", lit(1.0)),
+            block(block(block(print_stmt(ident("a"))))),
+        )
+        table = resolve_bindings(program)
+        assert table.lookup("a").distance == 3
+
+    def test_lookup_returns_binding_info(self):
+        """lookup() 반환값이 BindingInfo 이고 distance 속성을 갖는다."""
+        program = prog(var("x", lit(1.0)), print_stmt(ident("x")))
+        info = resolve_bindings(program).lookup("x")
+        assert isinstance(info, BindingInfo)
+        assert hasattr(info, "distance")
+
+    def test_lookup_unknown_name_raises(self):
+        """선언되지 않은 이름 조회 시 KeyError."""
+        table = resolve_bindings(prog())
+        with pytest.raises(KeyError):
+            table.lookup("unknown")
+
+    def test_for_iterator_distance_zero(self):
+        """for 반복자는 for 전용 스코프에 있으므로 body 에서 distance 0."""
+        program = prog(for_stmt("i", lit(0.0), lit(3.0), print_stmt(ident("i"))))
+        table = resolve_bindings(program)
+        assert table.lookup("i").distance == 0
+
+
+class TestFoldConstantsAndStats:
+    """fold_constants() 와 optimization_stats() 검증."""
+
+    def test_fold_constants_returns_program(self):
+        """fold_constants() 는 Program 을 반환한다."""
+        program = prog(expr_stmt(list_expr(ident("+"), lit(1.0), lit(2.0))))
+        result = fold_constants(program)
+        assert isinstance(result, Program)
+
+    def test_fold_constants_computes_literal(self):
+        """(+ 1 2) → LiteralExpr(3.0) 로 치환된다."""
+        program = prog(expr_stmt(list_expr(ident("+"), lit(1.0), lit(2.0))))
+        folded = fold_constants(program)
+        assert isinstance(folded.statements[0].expression, LiteralExpr)
+        assert folded.statements[0].expression.value == pytest.approx(3.0)
+
+    def test_fold_constants_nested(self):
+        """(+ 1 (* 2 3)) → LiteralExpr(7.0)."""
+        inner = list_expr(ident("*"), lit(2.0), lit(3.0))
+        outer = list_expr(ident("+"), lit(1.0), inner)
+        folded = fold_constants(prog(expr_stmt(outer)))
+        assert isinstance(folded.statements[0].expression, LiteralExpr)
+        assert folded.statements[0].expression.value == pytest.approx(7.0)
+
+    def test_optimization_stats_folded_count(self):
+        """fold_constants() 로 접힌 노드 수가 통계에 기록된다."""
+        inner = list_expr(ident("*"), lit(2.0), lit(3.0))
+        outer = list_expr(ident("+"), lit(1.0), inner)
+        folded = fold_constants(prog(expr_stmt(outer)))
+        stats = optimization_stats(folded)
+        assert "folded_expressions" in stats
+        assert stats["folded_expressions"] >= 1
+
+    def test_optimization_stats_two_folds(self):
+        """(+ 1 (* 2 3)) → 2회 접기 (inner + outer)."""
+        inner = list_expr(ident("*"), lit(2.0), lit(3.0))
+        outer = list_expr(ident("+"), lit(1.0), inner)
+        folded = fold_constants(prog(expr_stmt(outer)))
+        assert optimization_stats(folded)["folded_expressions"] == 2
+
+    def test_optimization_stats_unoptimized_program_zero(self):
+        """일반 Program 에 대해서는 접기 횟수 0 을 반환한다."""
+        program = prog(expr_stmt(lit(42.0)))
+        assert optimization_stats(program)["folded_expressions"] == 0
+
+    def test_fold_constants_preserves_original(self):
+        """원본 Program 은 불변이다."""
+        original_expr = list_expr(ident("+"), lit(1.0), lit(2.0))
+        program = prog(expr_stmt(original_expr))
+        fold_constants(program)
+        assert isinstance(program.statements[0].expression, ListExpr)
+
+    def test_fold_constants_variable_not_folded(self):
+        """변수를 포함한 식은 접히지 않는다."""
+        program = prog(
+            var("x", lit(1.0)),
+            expr_stmt(list_expr(ident("+"), ident("x"), lit(2.0))),
+        )
+        folded = fold_constants(program)
+        assert isinstance(folded.statements[1].expression, ListExpr)
+        assert optimization_stats(folded)["folded_expressions"] == 0
+
+
+class TestOptimize:
+    """optimize() — 전체 최적화 파이프라인 검증."""
+
+    def test_optimize_returns_program(self):
+        """optimize() 는 Program 을 반환한다."""
+        program = prog(expr_stmt(list_expr(ident("+"), lit(1.0), lit(2.0))))
+        result = optimize(program)
+        assert isinstance(result, Program)
+
+    def test_optimize_applies_constant_folding(self):
+        """optimize() 후 상수 표현식이 LiteralExpr 로 치환된다."""
+        program = prog(expr_stmt(list_expr(ident("*"), lit(3.0), lit(4.0))))
+        optimized = optimize(program)
+        assert isinstance(optimized.statements[0].expression, LiteralExpr)
+        assert optimized.statements[0].expression.value == pytest.approx(12.0)
+
+    def test_optimize_result_passable_to_check(self):
+        """optimize() 결과물은 check() 를 정상 통과한다."""
+        program = prog(
+            var("x", lit(1.0)),
+            print_stmt(list_expr(ident("+"), ident("x"), list_expr(ident("*"), lit(2.0), lit(3.0)))),
+        )
+        check(program)
+        optimized = optimize(program)
+        check(optimized)  # 최적화 후 semantic check 재통과
+
+    def test_optimize_result_produces_correct_execution(self, capsys):
+        """optimize() 결과물을 execute() 했을 때 올바른 결과를 낸다."""
+        from Executor import execute
+        program = prog(print_stmt(list_expr(ident("+"), lit(10.0), lit(5.0))))
+        optimized = optimize(program)
+        execute(optimized)
+        assert capsys.readouterr().out.strip() == "15.0"
