@@ -148,17 +148,7 @@ class StaticChecker(Checker):
         self._check_expr(stmt.expression, scopes)
 
     def _check_exprstmt(self, stmt: ExpressionStmt, scopes: _ScopeStack) -> None:
-        expr = stmt.expression
-        # 'init' 메서드 내부에서 return 값 사용 검사
-        if (isinstance(expr, ListExpr) and
-                expr.elements and
-                isinstance(expr.elements[0], IdentifierExpr) and
-                expr.elements[0].name == "return" and
-                len(expr.elements) > 1 and
-                self._method_stack and
-                self._method_stack[-1]["is_init"]):
-            raise CheckError("'init' method cannot use 'return' with a value")
-        self._check_expr(expr, scopes)
+        self._check_expr(stmt.expression, scopes)
 
     def _check_set_stmt(self, stmt: SetStmt, scopes: _ScopeStack) -> None:
         scopes.resolve(stmt.target, stmt.location)
@@ -208,12 +198,10 @@ class StaticChecker(Checker):
         in_method = bool(self._method_stack)
         if not in_function and not in_method:
             raise CheckError("'return' is used outside function")
-        # init 메서드에서 값 반환 금지 (함수 안이 아닐 때만 — 함수 안에서는 허용)
-        if in_method and not in_function and stmt.value is not None:
-            if self._method_stack[-1]["is_init"]:
-                raise CheckError("'init' method cannot use 'return' with a value")
         if stmt.value is not None:
             self._check_expr(stmt.value, scopes)
+            if in_method and self._method_stack[-1]["is_init"]:
+                raise CheckError("'init' method cannot use 'return' with a value")
 
     def _check_class_stmt(self, stmt: ClassStmt, scopes: _ScopeStack) -> None:
         # 자기 자신 상속 검사

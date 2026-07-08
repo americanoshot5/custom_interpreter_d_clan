@@ -33,7 +33,7 @@ _BINARY: dict[str, Callable[[RuntimeValue, RuntimeValue], RuntimeValue]] = {
 }
 
 _ARRAY_OPS: frozenset[str] = frozenset({"Array", "index", "set-index!"})
-_ALL_OPS: frozenset[str] = frozenset(_UNARY) | frozenset(_BINARY) | _ARRAY_OPS | {"instanceof", "return"}
+_ALL_OPS: frozenset[str] = frozenset(_UNARY) | frozenset(_BINARY) | _ARRAY_OPS | {"instanceof"}
 
 # ── 함수 런타임 값 / 반환 시그널 ──────────────────────────────────────────────
 
@@ -297,10 +297,6 @@ class SExpressionExecutor(Executor):
 
         if not isinstance(op, str):
             raise ExecuteError(f"'{op}' is not callable")
-
-        # return: 현재는 값을 그대로 반환 (함수 기능 구현 전 임시)
-        if op == "return":
-            return self._execute_expr(expr.elements[1]) if len(expr.elements) > 1 else None
 
         # instanceof 특수 처리
         if op == "instanceof":
