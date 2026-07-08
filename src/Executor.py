@@ -33,9 +33,7 @@ _BINARY: dict[str, Callable[[RuntimeValue, RuntimeValue], RuntimeValue]] = {
 }
 
 _ARRAY_OPS: frozenset[str] = frozenset({"Array", "index", "set-index!"})
-
-_ALL_OPS: frozenset[str] = frozenset(_UNARY) | frozenset(_BINARY) | _ARRAY_OPS
-
+_ALL_OPS: frozenset[str] = frozenset(_UNARY) | frozenset(_BINARY) | _ARRAY_OPS | {"instanceof", "return"}
 
 # ── 함수 런타임 값 / 반환 시그널 ──────────────────────────────────────────────
 
@@ -293,6 +291,27 @@ class SExpressionExecutor(Executor):
             return self._call_function(op, args)
 
         if not isinstance(op, str) or op not in _ALL_OPS:
+        # 클래스명을 생성자로 직접 호출: (ClassName args...)
+        if isinstance(op, ClassDef):
+            args = [self._execute_expr(a) for a in expr.elements[1:]]
+            return self._create_instance(op, args)
+
+        if not isinstance(op, str):
+            raise ExecuteError(f"'{op}' is not callable")
+
+        # return: 현재는 값을 그대로 반환 (함수 기능 구현 전 임시)
+        if op == "return":
+            return self._execute_expr(expr.elements[1]) if len(expr.elements) > 1 else None
+
+        # instanceof 특수 처리
+        if op == "instanceof":
+            if len(expr.elements) != 3:
+                raise ExecuteError("'instanceof' requires exactly 2 arguments")
+            obj_val = self._execute_expr(expr.elements[1])
+            class_val = self._execute_expr(expr.elements[2])
+            return self._do_instanceof(obj_val, class_val)
+
+        if op not in _ALL_OPS:
             raise ExecuteError(f"'{op}' is not a callable operator")
 
         if op in _ARRAY_OPS:
@@ -359,38 +378,48 @@ class SExpressionExecutor(Executor):
         array[idx] = value
         return value
 
+    def _create_instance(self, class_def: ClassDef, args: list[RuntimeValue]) -> ClassInstance:
+        instance = ClassInstance(
+            class_def=class_def,
+            fields={name: None for name in class_def.get_all_field_names()},
+        )
+        init_result = class_def.lookup_method("init")
+        if init_result is not None:
+            init_def, defining_class = init_result
+            self._call_method(instance, init_def, defining_class, args)
+        elif args:
+            raise ExecuteError(
+                f"Class '{class_def.name}' has no 'init' method "
+                f"but {len(args)} argument(s) were provided"
+            )
+        return instance
+
+    def _do_instanceof(self, obj: RuntimeValue, cls: RuntimeValue) -> bool:
+        if not isinstance(cls, ClassDef):
+            raise ExecuteError("'instanceof' second argument must be a class")
+        if not isinstance(obj, ClassInstance):
+            return False
+        current = obj.class_def
+        while current is not None:
+            if current is cls or current.name == cls.name:
+                return True
+            current = current.parent
+        return False
+
     # ── OOP 실행 ─────────────────────────────────────────────────────────────
 
     def _execute_new_expr(self, expr: NewExpr) -> RuntimeValue:
         class_val = self._environment.lookup(expr.class_name)
         if not isinstance(class_val, ClassDef):
             raise ExecuteError(f"'{expr.class_name}' is not a class")
-
-        # 필드를 모두 None 으로 초기화
-        instance = ClassInstance(
-            class_def=class_val,
-            fields={name: None for name in class_val.get_all_field_names()},
-        )
-
-        # init 메서드가 있으면 호출
-        init_result = class_val.lookup_method("init")
-        if init_result is not None:
-            init_def, defining_class = init_result
-            args = [self._execute_expr(a) for a in expr.args]
-            self._call_method(instance, init_def, defining_class, args)
-        elif expr.args:
-            raise ExecuteError(
-                f"Class '{expr.class_name}' has no 'init' method "
-                f"but {len(expr.args)} argument(s) were provided"
-            )
-
-        return instance
+        args = [self._execute_expr(a) for a in expr.args]
+        return self._create_instance(class_val, args)
 
     def _execute_dot_expr(self, expr: DotExpr) -> RuntimeValue:
         obj = self._execute_expr(expr.obj)
         if not isinstance(obj, ClassInstance):
             raise ExecuteError(
-                f"'.' operator requires an object, got {type(obj).__name__!r}"
+                f"'.' operator requires an instance object, got {type(obj).__name__!r}"
             )
 
         args = [self._execute_expr(a) for a in expr.args]
@@ -402,20 +431,19 @@ class SExpressionExecutor(Executor):
             method_def, defining_class = method_result
             return self._call_method(obj, method_def, defining_class, args)
 
-        # 필드 처리
-        all_fields = obj.class_def.get_all_field_names()
-        if slot in all_fields:
-            if len(args) == 0:        # 읽기
-                return obj.fields.get(slot)
-            if len(args) == 1:        # 쓰기
-                obj.fields[slot] = args[0]
-                return args[0]
+        # 필드 처리 — 구 문법은 pre-declared(obj.fields에 None으로 존재),
+        # 새 문법은 set-field! 로 동적 생성
+        if len(args) == 0:  # 읽기
+            if slot in obj.fields:
+                return obj.fields[slot]
             raise ExecuteError(
-                f"Field '{slot}' expects 0 (read) or 1 (write) argument(s), got {len(args)}"
+                f"'{obj.class_def.name}' has no field or method '{slot}'"
             )
-
+        if len(args) == 1:  # 쓰기 (새 필드 동적 생성 포함)
+            obj.fields[slot] = args[0]
+            return args[0]
         raise ExecuteError(
-            f"'{obj.class_def.name}' has no field or method '{slot}'"
+            f"Field '{slot}' expects 0 (read) or 1 (write) argument(s), got {len(args)}"
         )
 
     def _execute_super_expr(self, expr: SuperExpr) -> RuntimeValue:
@@ -460,6 +488,7 @@ class SExpressionExecutor(Executor):
         self._environment = Environment(parent=previous)
         # self, __class__ (super 탐색용), 파라미터를 바인딩
         self._environment.define("self", instance)
+        self._environment.define("This", instance)   # 새 문법 alias
         self._environment.define("__class__", defining_class)
         for param, val in zip(method_def.params, args):
             self._environment.define(param, val)

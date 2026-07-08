@@ -43,6 +43,8 @@ class _ScopeStack:
                 "references itself" CheckError.
     - begin_declaring / end_declaring :
                 VarStmt 초기화식 검사 구간을 감싸서 자기 참조를 감지한다.
+    - add_class_name / is_class_name :
+                클래스 선언인 이름을 별도로 추적하여 "superclass must be a class" 검사에 활용한다.
     """
 
     def __init__(self) -> None:
@@ -50,13 +52,22 @@ class _ScopeStack:
         self._stack: list[dict[str, SourceLocation | None]] = [
             {name: None for name in BUILTIN_OPS}
         ]
+        self._class_names_stack: list[set[str]] = [set()]
         self._declaring: str | None = None
 
     def push(self) -> None:
         self._stack.append({})
+        self._class_names_stack.append(set())
 
     def pop(self) -> None:
         self._stack.pop()
+        self._class_names_stack.pop()
+
+    def add_class_name(self, name: str) -> None:
+        self._class_names_stack[-1].add(name)
+
+    def is_class_name(self, name: str) -> bool:
+        return any(name in level for level in reversed(self._class_names_stack))
 
     def declare(self, name: str, location: SourceLocation | None) -> None:
         """현재 스코프에 name 을 등록한다. 같은 스코프 내 중복이면 CheckError."""
@@ -121,6 +132,7 @@ class StaticChecker(Checker):
 
     def check(self, program: Program) -> None:
         scopes = _ScopeStack()
+        self._method_stack: list[dict] = []  # [{class_name, has_parent, is_init}]
         for stmt in program.statements:
             self._check_stmt(stmt, scopes)
 
@@ -136,7 +148,17 @@ class StaticChecker(Checker):
         self._check_expr(stmt.expression, scopes)
 
     def _check_exprstmt(self, stmt: ExpressionStmt, scopes: _ScopeStack) -> None:
-        self._check_expr(stmt.expression, scopes)
+        expr = stmt.expression
+        # 'init' 메서드 내부에서 return 값 사용 검사
+        if (isinstance(expr, ListExpr) and
+                expr.elements and
+                isinstance(expr.elements[0], IdentifierExpr) and
+                expr.elements[0].name == "return" and
+                len(expr.elements) > 1 and
+                self._method_stack and
+                self._method_stack[-1]["is_init"]):
+            raise CheckError("'init' method cannot use 'return' with a value")
+        self._check_expr(expr, scopes)
 
     def _check_set_stmt(self, stmt: SetStmt, scopes: _ScopeStack) -> None:
         scopes.resolve(stmt.target, stmt.location)
@@ -188,13 +210,26 @@ class StaticChecker(Checker):
             self._check_expr(stmt.value, scopes)
 
     def _check_class_stmt(self, stmt: ClassStmt, scopes: _ScopeStack) -> None:
-        # 부모 클래스가 있으면 먼저 존재 확인 (자기 자신 참조 방지)
+        # 자기 자신 상속 검사
+        if stmt.parent is not None and stmt.parent == stmt.name:
+            raise CheckError(f"A class cannot inherit from itself: '{stmt.name}'")
+        # 부모 존재 확인 + 클래스인지 확인
         if stmt.parent is not None:
             scopes.resolve(stmt.parent, stmt.location)
+            if not scopes.is_class_name(stmt.parent):
+                raise CheckError(
+                    f"'{stmt.parent}' is not a class and cannot be used as a superclass"
+                )
         # 클래스 이름을 현재 스코프에 등록
         scopes.declare(stmt.name, stmt.location)
-        # 메서드 본문 검사: self 를 스코프에 추가
+        scopes.add_class_name(stmt.name)
+        # 메서드 본문 검사
         for method in stmt.methods:
+            self._method_stack.append({
+                "class_name": stmt.name,
+                "has_parent": stmt.parent is not None,
+                "is_init": method.name == "init",
+            })
             scopes.push()
             scopes.declare("self", None)
             for param in method.params:
@@ -202,6 +237,7 @@ class StaticChecker(Checker):
             for s in method.body:
                 self._check_stmt(s, scopes)
             scopes.pop()
+            self._method_stack.pop()
 
     # ── 식(Expr) ──────────────────────────────────────────────────────────────
 
@@ -209,6 +245,11 @@ class StaticChecker(Checker):
         if isinstance(expr, LiteralExpr):
             return
         if isinstance(expr, IdentifierExpr):
+            # 'This' 는 클래스 메서드 내부에서만 유효
+            if expr.name == "This":
+                if not self._method_stack:
+                    raise CheckError("'This' used outside class")
+                return
             scopes.resolve(expr.name, expr.location)
         elif isinstance(expr, ListExpr):
             for element in expr.elements:
@@ -227,7 +268,13 @@ class StaticChecker(Checker):
             for arg in expr.args:
                 self._check_expr(arg, scopes)
         elif isinstance(expr, SuperExpr):
-            # super 인수만 검사 (메서드 이름 존재는 런타임에서 확인)
+            if not self._method_stack:
+                raise CheckError("'Super' used outside class")
+            if not self._method_stack[-1]["has_parent"]:
+                raise CheckError(
+                    f"'Super' cannot be used in class '{self._method_stack[-1]['class_name']}' "
+                    f"which has no parent class"
+                )
             for arg in expr.args:
                 self._check_expr(arg, scopes)
         else:

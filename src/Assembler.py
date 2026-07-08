@@ -50,9 +50,10 @@ class SExpressionAssembler(Assembler):
 
     # 새로운 expression special form 추가 시: 이 테이블에 한 줄 + 파서 메서드 하나만 추가하면 됩니다.
     _EXPR_FORMS: ClassVar[dict[TokenType, str]] = {
-        TokenType.NEW:   "_parse_new_expr",
-        TokenType.DOT:   "_parse_dot_expr",
-        TokenType.SUPER: "_parse_super_expr",
+        TokenType.NEW:           "_parse_new_expr",
+        TokenType.DOT:           "_parse_dot_expr",
+        TokenType.SUPER:         "_parse_super_expr",
+        TokenType.DOTIDENTIFIER: "_parse_dotidentifier_expr",
     }
 
     def __init__(self, tokens: Sequence[Token]) -> None:
@@ -195,12 +196,17 @@ class SExpressionAssembler(Assembler):
             )
         class_name = name_token.lexeme
 
+        # 새 문법 감지: '{' 또는 ':' 가 뒤따르면 새 문법 (braces + colon 상속)
+        if (self._peek().type is TokenType.LEFT_BRACE or
+                self._peek().lexeme == ":"):
+            return self._parse_new_class_body(open_paren, class_name)
+
+        # ── 구 문법 ──────────────────────────────────────────────────────────
         # 선택적 부모 클래스: 다음 토큰이 IDENTIFIER 이면 부모 이름
         parent_name: str | None = None
         if self._peek().type is TokenType.IDENTIFIER:
             parent_name = self._advance().lexeme
 
-        # 클래스 본문: (field ...) 또는 (method ...) 반복
         fields: list[str] = []
         methods: list[MethodDef] = []
 
@@ -238,6 +244,110 @@ class SExpressionAssembler(Assembler):
             parent=parent_name,
             fields=tuple(fields),
             methods=tuple(methods),
+            location=open_paren.location,
+        )
+
+    def _parse_new_class_body(self, open_paren: Token, class_name: str) -> ClassStmt:
+        """새 문법 클래스 본문: (class Name { ... }) 또는 (class Name : Parent { ... })"""
+        parent_name: str | None = None
+        if self._peek().lexeme == ":":
+            self._advance()  # consume ':'
+            parent_tok = self._advance()
+            parent_name = parent_tok.lexeme
+
+        self._consume(TokenType.LEFT_BRACE, f"Expected '{{' for class '{class_name}' body")
+
+        methods: list[MethodDef] = []
+        while not self._check(TokenType.RIGHT_BRACE):
+            if self._is_at_end():
+                raise AssembleError(f"Missing '}}' for class '{class_name}'")
+            self._consume(TokenType.LEFT_PAREN, "Expected '(' for method definition")
+            if self._peek().type is not TokenType.METHOD:
+                tok = self._peek()
+                raise AssembleError(
+                    f"Expected 'method' at {tok.location.line}:{tok.location.column}"
+                )
+            methods.append(self._parse_new_method_def())
+
+        self._consume(TokenType.RIGHT_BRACE, f"Expected '}}' to close class '{class_name}'")
+        self._consume(TokenType.RIGHT_PAREN, f"Expected ')' to close class '{class_name}'")
+        return ClassStmt(
+            name=class_name,
+            parent=parent_name,
+            fields=(),
+            methods=tuple(methods),
+            location=open_paren.location,
+        )
+
+    def _parse_new_method_def(self) -> MethodDef:
+        """새 문법 메서드: (method name (params...) { body... })"""
+        method_kw = self._advance()  # consume 'method'
+        loc = method_kw.location
+        name_tok = self._advance()
+        method_name = name_tok.lexeme
+
+        self._consume(TokenType.LEFT_PAREN, "Expected '(' for method parameters")
+        params: list[str] = []
+        while not self._check(TokenType.RIGHT_PAREN):
+            if self._is_at_end():
+                raise AssembleError(f"Missing ')' in method '{method_name}' parameters")
+            params.append(self._advance().lexeme)
+        self._consume(TokenType.RIGHT_PAREN, "Expected ')' to close method parameters")
+
+        self._consume(TokenType.LEFT_BRACE, f"Expected '{{' for method '{method_name}' body")
+        body: list[Stmt] = []
+        while not self._check(TokenType.RIGHT_BRACE):
+            if self._is_at_end():
+                raise AssembleError(f"Missing '}}' for method '{method_name}'")
+            body.append(self._statement())
+        self._consume(TokenType.RIGHT_BRACE, f"Expected '}}' to close method '{method_name}'")
+
+        self._consume(TokenType.RIGHT_PAREN, f"Expected ')' to close method '{method_name}'")
+        return MethodDef(
+            name=method_name,
+            params=tuple(params),
+            body=tuple(body),
+            location=loc,
+        )
+
+    def _parse_get_field_expr(self, open_paren: Token) -> DotExpr:
+        """(get-field obj fieldName) → DotExpr(obj, fieldName, ())"""
+        self._advance()  # consume 'get-field'
+        obj = self._expression()
+        field_tok = self._advance()  # field name treated as literal symbol
+        self._consume(TokenType.RIGHT_PAREN, "Expected ')' to close get-field")
+        return DotExpr(obj=obj, slot=field_tok.lexeme, args=(), location=open_paren.location)
+
+    def _parse_set_field_expr(self, open_paren: Token) -> DotExpr:
+        """(set-field! obj fieldName value) → DotExpr(obj, fieldName, (value,))"""
+        self._advance()  # consume 'set-field!'
+        obj = self._expression()
+        field_tok = self._advance()  # field name treated as literal symbol
+        value = self._expression()
+        self._consume(TokenType.RIGHT_PAREN, "Expected ')' to close set-field!")
+        return DotExpr(obj=obj, slot=field_tok.lexeme, args=(value,), location=open_paren.location)
+
+    def _parse_dotidentifier_expr(self, open_paren: Token) -> Expr:
+        """(obj.method args...) or (Super.method args...) from DOTIDENTIFIER token"""
+        tok = self._advance()  # consume DOTIDENTIFIER
+        lexeme = tok.lexeme
+        dot_pos = lexeme.index(".")
+        obj_name = lexeme[:dot_pos]
+        method_name = lexeme[dot_pos + 1:]
+
+        args: list[Expr] = []
+        while not self._check(TokenType.RIGHT_PAREN):
+            if self._is_at_end():
+                raise AssembleError(f"Missing ')' in '{lexeme}' call")
+            args.append(self._expression())
+        self._consume(TokenType.RIGHT_PAREN, f"Expected ')' to close '{lexeme}' call")
+
+        if obj_name == "Super":
+            return SuperExpr(method=method_name, args=tuple(args), location=open_paren.location)
+        return DotExpr(
+            obj=IdentifierExpr(obj_name, location=tok.location),
+            slot=method_name,
+            args=tuple(args),
             location=open_paren.location,
         )
 
@@ -297,10 +407,18 @@ class SExpressionAssembler(Assembler):
         return ArrayExpr(size=size, location=open_bracket.location)
 
     def _parse_list(self, open_paren: Token) -> Expr:
-        # expression-level special forms (new / . / super)
+        # expression-level special forms (new / . / super / dotidentifier)
         expr_method = self._EXPR_FORMS.get(self._peek().type)
         if expr_method:
             return getattr(self, expr_method)(open_paren)
+
+        # lexeme 기반 special form: get-field / set-field!
+        if self._peek().type is TokenType.IDENTIFIER:
+            lex = self._peek().lexeme
+            if lex == "get-field":
+                return self._parse_get_field_expr(open_paren)
+            if lex == "set-field!":
+                return self._parse_set_field_expr(open_paren)
 
         # 일반 ListExpr
         elements: list[Expr] = []

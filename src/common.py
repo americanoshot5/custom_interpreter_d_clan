@@ -105,6 +105,7 @@ BUILTIN_OPS: frozenset[str] = frozenset({
     "+", "-", "*", "/", "<", ">", "=",
     "and", "or", "not",
     "Array", "index", "set-index!",
+    "get-field", "set-field!", "instanceof", "return",
 })
 
 LiteralValue = str | float | bool | None
