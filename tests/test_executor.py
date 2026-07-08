@@ -1,4 +1,5 @@
 import pytest
+import unittest.mock as umock
 from common import *
 from Executor import *
 from Executor import Function
@@ -457,8 +458,8 @@ class TestOptimizerExecutorIntegration:
 
         folded = fold_constants(program)
         exec_instance = SExpressionExecutor()
-        spy = mocker.spy(exec_instance, "_execute_list_expr")
-        exec_instance.execute(folded)
+        with umock.patch.object(exec_instance, "_execute_list_expr", wraps=exec_instance._execute_list_expr) as spy:
+            exec_instance.execute(folded)
         assert spy.call_count == 0
 
     def test_optimization_stats_after_fold_execute(self):
@@ -525,8 +526,8 @@ class TestOptimizerExecutorIntegration:
         ))
         folded = fold_constants(program)
         exec_instance = SExpressionExecutor()
-        spy = mocker.spy(exec_instance, "_execute_list_expr")
-        exec_instance.execute(folded)
+        with umock.patch.object(exec_instance, "_execute_list_expr", wraps=exec_instance._execute_list_expr) as spy:
+            exec_instance.execute(folded)
         assert spy.call_count == 0
 
     def test_binding_table_lookup_returns_binding_info(self):
