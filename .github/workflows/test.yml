@@ -19,7 +19,17 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-mock
+          python -m pip install pytest pytest-mock
+
+      - name: Debug pytest environment
+        run: |
+          python -m pip show pytest
+          python -m pip show pytest-mock
+          python -m pytest --version
+          python - <<'PY'
+          import pytest_mock
+          print(pytest_mock.__file__)
+          PY
 
       - name: Run pytest
-        run: pytest
+        run: python -m pytest -vv
