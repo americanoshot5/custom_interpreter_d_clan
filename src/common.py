@@ -87,6 +87,7 @@ SINGLE_INVALID_CHAR_TOKENS: dict[str, str] = {
 BUILTIN_OPS: frozenset[str] = frozenset({
     "+", "-", "*", "/", "<", ">", "=",
     "and", "or", "not",
+    "Array", "index", "set-index!",
 })
 
 LiteralValue = str | float | bool | None

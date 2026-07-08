@@ -33,7 +33,9 @@ _BINARY: dict[str, Callable[[RuntimeValue, RuntimeValue], RuntimeValue]] = {
     "or":  lambda a, b: a or b,
 }
 
-_ALL_OPS: frozenset[str] = frozenset(_UNARY) | frozenset(_BINARY)
+_ARRAY_OPS: frozenset[str] = frozenset({"Array", "index", "set-index!"})
+
+_ALL_OPS: frozenset[str] = frozenset(_UNARY) | frozenset(_BINARY) | _ARRAY_OPS
 
 
 # ── 환경(스코프) ──────────────────────────────────────────────────────────────
@@ -190,6 +192,9 @@ class SExpressionExecutor(Executor):
         if not isinstance(op, str) or op not in _ALL_OPS:
             raise ExecuteError(f"'{op}' is not a callable operator")
 
+        if op in _ARRAY_OPS:
+            return self._execute_array_op(op, expr)
+
         args = [self._execute_expr(arg) for arg in expr.elements[1:]]
         n = len(args)
 
@@ -203,6 +208,48 @@ class SExpressionExecutor(Executor):
             raise
         except TypeError as e:
             raise ExecuteError(str(e)) from e
+
+    def _execute_array_op(self, op: str, expr: ListExpr) -> RuntimeValue:
+        if op == "Array":
+            if len(expr.elements) != 2:
+                raise ExecuteError("Array takes exactly 1 argument (size)")
+            size = self._execute_expr(expr.elements[1])
+            if isinstance(size, bool) or not isinstance(size, (int, float)):
+                raise ExecuteError(f"Array size must be a number, got {type(size).__name__}")
+            size_int = int(size)
+            if size_int < 0:
+                raise ExecuteError(f"Array size must be non-negative, got {size_int}")
+            return [None] * size_int
+
+        if op == "index":
+            if len(expr.elements) != 3:
+                raise ExecuteError("index takes exactly 2 arguments (array, index)")
+            array = self._execute_expr(expr.elements[1])
+            if not isinstance(array, list):
+                raise ExecuteError("Cannot index non-array value")
+            index = self._execute_expr(expr.elements[2])
+            if isinstance(index, bool) or not isinstance(index, (int, float)):
+                raise ExecuteError(f"Array index must be a number, got {type(index).__name__}")
+            idx = int(index)
+            if idx < 0 or idx >= len(array):
+                raise ExecuteError(f"Array index {idx} out of bounds for array of size {len(array)}")
+            return array[idx]
+
+        # op == "set-index!"
+        if len(expr.elements) != 4:
+            raise ExecuteError("set-index! takes exactly 3 arguments (array, index, value)")
+        array = self._execute_expr(expr.elements[1])
+        if not isinstance(array, list):
+            raise ExecuteError("Cannot index non-array value")
+        index = self._execute_expr(expr.elements[2])
+        if isinstance(index, bool) or not isinstance(index, (int, float)):
+            raise ExecuteError(f"Array index must be a number, got {type(index).__name__}")
+        idx = int(index)
+        if idx < 0 or idx >= len(array):
+            raise ExecuteError(f"Array index {idx} out of bounds for array of size {len(array)}")
+        value = self._execute_expr(expr.elements[3])
+        array[idx] = value
+        return value
 
 
 DefaultExecutor = SExpressionExecutor
