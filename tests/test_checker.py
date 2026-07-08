@@ -574,3 +574,48 @@ class TestImportStmt:
             print_stmt(ident("m")),
         )
         check(program)  # 예외 없이 통과해야 한다
+
+    def test_duplicate_import_same_scope_raises(self, tmp_path):
+        lib = tmp_path / "lib.cf"
+        lib.write_text("(var answer 1)", encoding="utf-8")
+        program = prog(
+            import_stmt(lit(str(lib)), alias="a"),
+            import_stmt(lit(str(lib)), alias="b"),
+        )
+        with pytest.raises(CheckError, match="already imported|duplicate"):
+            check(program)
+
+    def test_alias_collision_with_existing_variable_raises(self, tmp_path):
+        lib = tmp_path / "lib.cf"
+        lib.write_text("(var answer 1)", encoding="utf-8")
+        program = prog(
+            var("sum", init=lit(0.0)),
+            import_stmt(lit(str(lib)), alias="sum"),
+        )
+        with pytest.raises(CheckError, match="already declared"):
+            check(program)
+
+    def test_import_cycle_raises(self, tmp_path):
+        a = tmp_path / "a.cf"
+        b = tmp_path / "b.cf"
+        a.write_text(f'(import "{b}" alias b)', encoding="utf-8")
+        b.write_text(f'(import "{a}" alias a)', encoding="utf-8")
+        program = prog(import_stmt(lit(str(a)), alias="a"))
+        with pytest.raises(CheckError, match="circular|cycle|순환"):
+            check(program)
+
+    def test_import_inside_for_loop_raises(self, tmp_path):
+        lib = tmp_path / "lib.cf"
+        lib.write_text("(var answer 1)", encoding="utf-8")
+        program = prog(
+            for_stmt("i", lit(0.0), lit(1.0), import_stmt(lit(str(lib)), alias="m")),
+        )
+        with pytest.raises(CheckError, match="for|loop"):
+            check(program)
+
+    def test_imported_file_own_errors_propagate_as_check_error(self, tmp_path):
+        lib = tmp_path / "broken.cf"
+        lib.write_text("(print notDefined)", encoding="utf-8")
+        program = prog(import_stmt(lit(str(lib)), alias="m"))
+        with pytest.raises(CheckError, match="notDefined"):
+            check(program)
