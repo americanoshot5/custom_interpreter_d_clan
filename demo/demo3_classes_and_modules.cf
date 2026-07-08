@@ -1,0 +1,37 @@
+(print "=== Demo 3: 클래스 상속 + 모듈 import ===")
+(print "")
+
+(class Animal {
+  (method init (name) {
+    (set-field! This name name)
+  })
+  (method speak () {
+    (return "...")
+  })
+  (method describe () {
+    (print (get-field This name))
+    (print (This.speak))
+  })
+})
+
+(class Dog : Animal {
+  (method speak () {
+    (return (+ (Super.speak) " Woof!"))
+  })
+})
+
+(var d (Dog "Rex"))
+(d.describe)
+
+(print "")
+(print "instanceof 확인:")
+(print (instanceof d Dog))
+(print (instanceof d Animal))
+
+(print "")
+(print "모듈 import: demo3_module_utils.cf 에서 함수 가져오기")
+(import "demo/demo3_module_utils.cf" alias util)
+(print "5의 제곱:")
+(print (util.square 5))
+(print "3의 세제곱:")
+(print (util.cube 3))
