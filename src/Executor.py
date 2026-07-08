@@ -3,10 +3,14 @@ from __future__ import annotations
 import operator as _op
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, ClassVar
 
 from common import *
 from interfaces import *
+from Tokenizer import tokenize
+from Assembler import assemble
+from Checker import check
 
 # ── 연산자 테이블 ─────────────────────────────────────────────────────────────
 #
@@ -47,6 +51,12 @@ class Function:
 class _ReturnSignal(Exception):
     def __init__(self, value: "RuntimeValue") -> None:
         self.value = value
+
+
+@dataclass
+class Module:
+    name: str
+    environment: "Environment"
 # ── 런타임 객체 ───────────────────────────────────────────────────────────────
 
 @dataclass
@@ -126,6 +136,7 @@ class SExpressionExecutor(Executor):
         FuncDefStmt:    "_execute_funcdefstmt",
         ReturnStmt:     "_execute_returnstmt",
         ClassStmt:      "_execute_classstmt",
+        ImportStmt:     "_execute_importstmt",
     }
 
     def __init__(self):
@@ -236,6 +247,24 @@ class SExpressionExecutor(Executor):
             methods={m.name: m for m in stmt.methods},
         )
         self._environment.define(stmt.name, class_def)
+        return None
+
+    def _execute_importstmt(self, stmt: ImportStmt) -> RuntimeValue:
+        path = stmt.path.value  # Checker 가 이미 문자열 리터럴임을 검증했다
+        source = Path(path).read_text(encoding="utf-8")
+        imported_program = assemble(tokenize(source))
+        check(imported_program)
+
+        module_env = Environment()
+        previous = self._environment
+        self._environment = module_env
+        try:
+            for s in imported_program.statements:
+                self._execute_stmt(s)
+        finally:
+            self._environment = previous
+
+        self._environment.define(stmt.alias, Module(name=stmt.alias, environment=module_env))
         return None
 
     # ── 식(Expr) 평가 ─────────────────────────────────────────────────────────
