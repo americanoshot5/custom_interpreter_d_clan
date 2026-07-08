@@ -3,9 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 
 from Assembler import assemble
-from Checker import check
+from Checker import StaticChecker
 from common import LanguageError, Program, RuntimeValue, Token
-from Executor import execute
+from Executor import SExpressionExecutor
 from Tokenizer import tokenize
 
 
@@ -71,13 +71,15 @@ def run_shell(
 
 
 def main() -> None:
+    checker = StaticChecker()
+    executor = SExpressionExecutor()
     run_shell(
         read_line=input,
         write_output=print,
         tokenize=tokenize,
         assemble=assemble,
-        check=check,
-        execute=execute,
+        check=checker.check,
+        execute=executor.execute,
     )
 
 
