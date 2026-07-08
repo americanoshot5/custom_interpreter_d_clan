@@ -1,94 +1,654 @@
-# 모듈별 유닛 테스트 및 스텁 되돌리기 설계
+# S-Expression 언어 사용 가이드
 
-## 배경
+이 인터프리터가 실행하는 언어는 **S-expression** (괄호 기반) 문법을 사용합니다.  
+모든 연산과 제어 흐름은 `(연산자 인자1 인자2 ...)` 형태로 표현됩니다.
 
-S-Expression 언어 인터프리터를 만드는 학습용 팀 프로젝트다. 각 모듈(Tokenizer, Assembler,
-Checker, Executor)을 팀원별로 나눠 구현하고 GitHub로 협업할 계획이었다. 그런데 준비 과정에서
-Tokenizer, Assembler, Checker에 실제 구현이 들어가 버려, 원래 의도(각자 인터페이스만 보고
-학습하며 구현)가 깨진 상태다. Executor만 원래 계획대로 스텁(`raise ExecuteError(...)`)으로
-남아 있다.
+---
 
-이 스펙은 다음 두 가지를 다룬다:
+## 목차
 
-1. Tokenizer / Assembler / Checker 구현부를 Executor와 동일한 패턴의 스텁으로 되돌린다.
-2. `tests/` 하위 5개 빈 테스트 파일에 모듈별 유닛 테스트와 통합 테스트를 채운다.
+1. [인터프리터 실행하기](#1-인터프리터-실행하기)
+2. [리터럴 값](#2-리터럴-값)
+3. [변수](#3-변수)
+4. [연산자](#4-연산자)
+5. [출력](#5-출력)
+6. [조건문](#6-조건문)
+7. [반복문](#7-반복문)
+8. [블록](#8-블록)
+9. [함수](#9-함수)
+10. [배열](#10-배열)
+11. [클래스](#11-클래스)
+12. [모듈 (import)](#12-모듈-import)
+13. [에러 메시지 읽기](#13-에러-메시지-읽기)
 
-테스트는 (되돌리기 전) 실제 구현이 보여준 동작을 스펙으로 삼아 작성한다. 스텁 상태에서는
-모든 테스트가 실패(red)하는 게 정상이며, 담당자가 각자 브랜치에서 구현하며 테스트를 통과시켜
-나가는 것이 목표다.
+---
 
-## 환경 설정
+## 1. 인터프리터 실행하기
 
-- 루트에 `pyproject.toml`을 추가하고 `[tool.pytest.ini_options]`에 `pythonpath = ["src"]`를
-  설정한다. `src/` 모듈들이 `from common import ...`처럼 절대 임포트를 사용하므로, pytest가
-  `src/`를 import 경로에 넣어줘야 별도 `conftest.py` 없이 테스트가 동작한다. (pytest 7+ 필요)
-- `requirements-dev.txt`에 `pytest`를 추가한다.
-
-## 스텁 되돌리기
-
-`SExpressionTokenizer.tokenize`, `SExpressionAssembler.assemble`, `StaticChecker.check`의
-본문을 각각 다음과 같이 되돌린다 (인터페이스 시그니처, `DefaultXxx` 별칭, 모듈 레벨 헬퍼
-함수는 그대로 유지):
-
-```python
-class SExpressionTokenizer(Tokenizer):
-    def tokenize(self, source: str) -> Sequence[Token]:
-        raise TokenizeError("Tokenizer implementation is not ready yet.")
+```
+python src/prompt_shell.py
 ```
 
-- Assembler → `AssembleError("Assembler implementation is not ready yet.")`
-- Checker → `CheckError("Checker implementation is not ready yet.")`
+실행하면 프롬프트가 나타납니다.
 
-사용하지 않게 되는 private 헬퍼 메서드(`_read_string`, `_check_expression` 등)는 함께
-제거한다.
+```
+>>>
+```
 
-## 테스트 내용
+### 입력 방법
 
-각 파일은 모듈별 핵심 시나리오 3~5개로 제한한다 (참고 프로젝트 수준의 촘촘함은 목표하지
-않음).
+- **한 줄 입력**: 괄호가 닫힌 표현식을 입력하고 **Enter** → 즉시 실행됩니다.
+- **여러 줄 입력**: 여러 줄에 걸쳐 입력하고 **빈 줄(Enter)** 을 입력하면 실행됩니다.
 
-### tests/test_tokenizer.py
+```
+>>> (+ 1 2)
+3.0
 
-- 기본 S-표현식 토큰화: `"(+ 1 2)"` → `LEFT_PAREN, IDENTIFIER("+"), NUMBER(1.0), NUMBER(2.0), RIGHT_PAREN, EOF`
-- 문자열 리터럴 토큰화: `'"hi"'` → `STRING` 토큰, literal 값 `"hi"`
-- 키워드 리터럴 처리: `"true"` / `"false"` → 각각 `TokenType.TRUE` / `TokenType.FALSE`, literal이 `True`/`False`
-- 잘못된 문자 → `TokenizeError` 발생
+>>> (var x 10)
+... (var y 20)
+... (+ x y)
+...
+30.0
+```
 
-### tests/test_assembler.py
+- `exit` 또는 `quit` 를 입력하면 종료됩니다.
 
-- 단일 리터럴: 토큰 `[NUMBER(42.0), EOF]` → `Program`의 statement가 `ExpressionStmt(LiteralExpr(42.0))`
-- 리스트 표현식: `"(+ 1 2)"`를 토큰화한 결과를 assemble → `ExpressionStmt(ListExpr((IdentifierExpr("+"), LiteralExpr(1.0), LiteralExpr(2.0))))`
-- 중첩 리스트: `"(+ 1 (* 2 3))"` → 중첩된 `ListExpr` 구조
-- 에러: 닫는 괄호 누락 → `AssembleError`
-- 에러: 여는 괄호 없이 `)` 등장 → `AssembleError`
+---
 
-### tests/test_checker.py
+## 2. 리터럴 값
 
-- 정상적인 `ExpressionStmt(ListExpr(...))`로 구성된 `Program`은 `check()` 호출 시 예외 없음
-- 중첩된 `ListExpr` 내부까지 재귀적으로 문제 없이 통과
-- 지원하지 않는 statement 타입(예: 더미 `Stmt` 서브클래스)이 포함된 `Program` → `CheckError`
+| 종류 | 예시 | 설명 |
+|------|------|------|
+| 정수/실수 | `42`, `3.14`, `-7` | 모든 숫자는 실수로 처리됩니다 |
+| 문자열 | `"hello"`, `"world"` | 큰따옴표로 감쌉니다 |
+| 불리언 | `true`, `false` | 대소문자 구분 |
+| null | `null` | 빈 값 |
 
-### tests/test_executor.py
+```
+>>> 42
+42.0
 
-되돌린 구현이 아직 없으므로, Tokenizer/Assembler가 만들어내는 flat S-expression AST
-(`ListExpr`/`LiteralExpr`/`IdentifierExpr`)를 그대로 평가하는 산술 계산기 수준의 동작을
-스펙으로 정의한다 (참고 프로젝트 `mylang.py`의 최소 기능과 동일한 결) :
+>>> "hello"
+hello
 
-- 리터럴 단독 평가: `Program(ExpressionStmt(LiteralExpr(42.0)))` → `42.0`
-- 기본 산술: `(+ 1 2)` 구조 실행 → `3.0`
-- 중첩 산술: `(+ 1 (* 2 3))` 구조 실행 → `7.0`
+>>> true
+True
+```
 
-### tests/test_integration.py
+---
 
-전체 파이프라인(`tokenize → assemble → check → execute`)을 실제 소스 문자열로 검증하는
-end-to-end 시나리오 2~3개:
+## 3. 변수
 
-- `"(+ 1 2)"` → 최종 결과 `3.0`
-- `"(+ 1 (* 2 3))"` → 최종 결과 `7.0`
+### 변수 선언
 
-## 범위 밖
+```
+(var 이름 초기값)
+(var 이름)          ; 초기값 없이 선언 (null로 초기화)
+```
 
-- `common.py`에 정의된 `VarStmt`/`IfStmt`/`ForStmt`/`BlockStmt`/`PrintStmt` 등은 현재
-  Assembler가 만들어내지 않으므로 이번 테스트 범위에 포함하지 않는다. 언어에 변수/조건문/
-  반복문을 추가하는 것은 이후 별도 스펙에서 다룬다.
-- CI 연동, pre-commit 등 협업 인프라는 이번 스펙에서 다루지 않는다.
+```
+>>> (var name "Alice")
+>>> (var count 0)
+>>> (var flag)      ; null
+```
+
+### 변수 재할당
+
+```
+(set! 이름 새값)
+```
+
+```
+>>> (var x 10)
+>>> (set! x 99)
+>>> x
+99.0
+```
+
+> **주의**: `set!`은 이미 선언된 변수에만 사용 가능합니다. 새 변수 생성에는 `var`을 쓰세요.
+
+---
+
+## 4. 연산자
+
+모든 연산자는 `(연산자 인자...)` 형태로 사용합니다.
+
+### 산술 연산
+
+```
+(+ a b)   ; 덧셈 (문자열 이어붙이기도 가능)
+(- a b)   ; 뺄셈
+(* a b)   ; 곱셈
+(/ a b)   ; 나눗셈
+(- x)     ; 단항 음수
+```
+
+```
+>>> (+ 3 4)
+7.0
+
+>>> (+ "hello" " world")
+hello world
+
+>>> (* 6 7)
+42.0
+```
+
+### 비교 연산
+
+```
+(< a b)   ; a < b
+(> a b)   ; a > b
+(= a b)   ; a == b
+```
+
+```
+>>> (< 3 5)
+True
+
+>>> (= "hi" "hi")
+True
+```
+
+### 논리 연산
+
+```
+(and a b)   ; 논리 AND
+(or  a b)   ; 논리 OR
+(not x)     ; 논리 NOT
+```
+
+```
+>>> (and true false)
+False
+
+>>> (not (< 10 5))
+True
+```
+
+### 중첩 표현식
+
+```
+>>> (* (+ 2 3) (- 10 4))
+30.0
+```
+
+---
+
+## 5. 출력
+
+```
+(print 표현식)
+```
+
+```
+>>> (print "Hello, World!")
+Hello, World!
+
+>>> (var name "Alice")
+>>> (print (+ "Hi, " name))
+Hi, Alice
+```
+
+---
+
+## 6. 조건문
+
+```
+(if 조건 then_문)
+(if 조건 then_문 else_문)
+```
+
+```
+>>> (var x 10)
+>>> (if (> x 5)
+...   (print "크다")
+...   (print "작다"))
+...
+크다
+```
+
+여러 문장을 실행하려면 **블록** `{ ... }` 을 사용합니다.
+
+```
+>>> (var score 85)
+>>> (if (>= score 90)
+...   { (print "A") (print "우수") }
+...   { (print "B") (print "보통") })
+...
+B
+보통
+```
+
+> **팁**: `>=`, `<=` 연산자는 없습니다. `(not (< a b))` 처럼 조합해 쓰세요.
+
+---
+
+## 7. 반복문
+
+```
+(for 변수 시작 끝 본문)
+```
+
+변수는 `시작`부터 `끝-1`까지 순회합니다 (`[시작, 끝)` 범위).
+
+```
+>>> (for i 0 5
+...   (print i))
+...
+0
+1
+2
+3
+4
+```
+
+외부 변수 누적 예:
+
+```
+>>> (var sum 0)
+>>> (for i 1 6
+...   (set! sum (+ sum i)))
+>>> sum
+15.0
+```
+
+---
+
+## 8. 블록
+
+중괄호 `{ }` 로 여러 문장을 하나의 단위로 묶습니다. 블록은 자체 스코프를 가집니다.
+
+```
+{
+  (var temp 100)
+  (print temp)
+}
+```
+
+블록 안에서 선언된 변수는 블록 밖에서 접근할 수 없습니다.
+
+```
+>>> (var x 1)
+>>> {
+...   (var x 99)
+...   (print x)
+... }
+...
+99
+>>> x
+1.0        ; 바깥쪽 x는 그대로
+```
+
+---
+
+## 9. 함수
+
+### 함수 정의
+
+```
+(func 함수이름 (파라미터...) 본문)
+```
+
+```
+>>> (func add (a b)
+...   (return (+ a b)))
+```
+
+### 함수 호출
+
+```
+(함수이름 인자...)
+```
+
+```
+>>> (add 3 4)
+7.0
+```
+
+### return
+
+```
+(return 값)
+(return)     ; 값 없이 반환 (null 반환)
+```
+
+### 예제: 재귀 함수
+
+```
+(func factorial (n)
+  (if (= n 0)
+    (return 1)
+    (return (* n (factorial (- n 1))))))
+
+(factorial 5)   ; → 120.0
+```
+
+### 클로저
+
+함수는 정의된 시점의 스코프를 기억합니다.
+
+```
+(var base 10)
+(func addBase (x)
+  (return (+ base x)))
+
+(addBase 5)   ; → 15.0
+```
+
+---
+
+## 10. 배열
+
+### 배열 생성
+
+```
+[크기]           ; 배열 리터럴 (모두 null로 초기화)
+(Array 크기)     ; 동일
+```
+
+```
+>>> (var arr [5])
+>>> arr
+[None, None, None, None, None]
+```
+
+### 원소 읽기
+
+```
+배열[인덱스]       ; 인덱스 연산자 (0부터 시작)
+(index 배열 인덱스)
+```
+
+```
+>>> (var arr [3])
+>>> (set-index! arr 0 "hello")
+>>> arr[0]
+hello
+```
+
+### 원소 쓰기
+
+```
+(set-index! 배열 인덱스 값)
+```
+
+### 배열 전체 예제
+
+```
+(var scores [4])
+(set-index! scores 0 90)
+(set-index! scores 1 85)
+(set-index! scores 2 78)
+(set-index! scores 3 92)
+
+(var sum 0)
+(for i 0 4
+  (set! sum (+ sum scores[i])))
+
+(print (/ sum 4))   ; 평균 → 86.25
+```
+
+> **주의**: 인덱스 범위를 벗어나면 에러가 발생합니다.
+
+---
+
+## 11. 클래스
+
+### 클래스 정의
+
+```
+(class 클래스이름 {
+  (method 메서드이름 (파라미터...) {
+    본문...
+  })
+})
+```
+
+- `init` 메서드는 생성자입니다.
+- 메서드 안에서 `This` 로 현재 인스턴스에 접근합니다.
+
+```
+(class Point {
+  (method init (x y) {
+    (set-field! This x x)
+    (set-field! This y y)
+  })
+  (method describe () {
+    (return (+ (+ "(" (get-field This x)) ")"))
+  })
+})
+```
+
+### 인스턴스 생성
+
+```
+(클래스이름 인자...)
+```
+
+```
+>>> (var p (Point 3 4))
+```
+
+### 메서드 호출
+
+```
+(인스턴스.메서드이름 인자...)
+```
+
+```
+>>> (p.describe)
+(3.0)
+```
+
+### 필드 읽기/쓰기
+
+```
+(get-field 인스턴스 필드이름)       ; 읽기
+(set-field! 인스턴스 필드이름 값)   ; 쓰기
+```
+
+```
+>>> (get-field p x)
+3.0
+
+>>> (set-field! p x 10)
+>>> (get-field p x)
+10.0
+```
+
+### 상속
+
+```
+(class 자식클래스 : 부모클래스 {
+  (method 메서드이름 (파라미터...) {
+    본문...
+  })
+})
+```
+
+부모 메서드 호출:
+
+```
+(Super.메서드이름 인자...)
+```
+
+```
+(class Animal {
+  (method speak () {
+    (return "...")
+  })
+})
+
+(class Dog : Animal {
+  (method speak () {
+    (return (+ (Super.speak) " woof!"))
+  })
+})
+
+(var d (Dog))
+(d.speak)   ; → "... woof!"
+```
+
+### instanceof
+
+```
+(instanceof 인스턴스 클래스)
+```
+
+부모 클래스에 대해서도 `true`를 반환합니다.
+
+```
+>>> (instanceof d Dog)
+True
+
+>>> (instanceof d Animal)
+True
+
+>>> (instanceof 42 Dog)
+False
+```
+
+### 클래스 전체 예제
+
+```
+(class BankAccount {
+  (method init (owner balance) {
+    (set-field! This owner owner)
+    (set-field! This balance balance)
+  })
+  (method deposit (amount) {
+    (set-field! This balance (+ (get-field This balance) amount))
+  })
+  (method withdraw (amount) {
+    (if (< (get-field This balance) amount)
+      (print "잔액 부족")
+      { (set-field! This balance (- (get-field This balance) amount))
+        (print "출금 완료") })
+  })
+  (method info () {
+    (print (+ (get-field This owner) ": "))
+    (print (get-field This balance))
+  })
+})
+
+(var acc (BankAccount "Alice" 1000))
+(acc.deposit 500)
+(acc.withdraw 200)
+(acc.info)
+```
+
+출력:
+```
+출금 완료
+Alice:
+1300.0
+```
+
+---
+
+## 12. 모듈 (import)
+
+다른 파일의 코드를 불러와 사용할 수 있습니다.
+
+### 임포트
+
+```
+(import "파일경로" alias 별칭)
+```
+
+경로는 현재 실행 위치 기준 상대 경로 또는 절대 경로를 사용합니다.
+
+### 임포트된 모듈 사용
+
+```
+(별칭.함수이름 인자...)
+```
+
+**예시**  
+`utils.sexp` 파일:
+```
+(func square (n)
+  (return (* n n)))
+```
+
+메인 파일:
+```
+(import "utils.sexp" alias u)
+(print (u.square 5))   ; → 25.0
+```
+
+> **제약**:
+> - 임포트 경로는 반드시 문자열 리터럴이어야 합니다.
+> - `for` 루프 안에서는 임포트할 수 없습니다.
+> - 같은 스코프에서 동일 파일을 두 번 임포트할 수 없습니다.
+> - 순환 임포트(A → B → A)는 금지됩니다.
+
+---
+
+## 13. 에러 메시지 읽기
+
+에러는 세 종류로 나뉩니다.
+
+| 에러 종류 | 발생 시점 | 예시 |
+|-----------|-----------|------|
+| `TokenizeError` | 알 수 없는 문자 | `` ` `` 또는 `@` 입력 |
+| `AssembleError` | 문법 오류 | 괄호 불일치, 잘못된 구조 |
+| `CheckError` | 의미 오류 | 미선언 변수, 중복 선언, 잘못된 `return` 위치 |
+| `ExecuteError` | 실행 오류 | 타입 불일치, 인덱스 초과, 없는 메서드 |
+
+```
+>>> (+ x 1)
+Error: Undefined variable 'x'
+
+>>> (var x 1)
+>>> (var x 2)
+Error: Variable 'x' is already declared in this scope
+```
+
+---
+
+## 빠른 참조
+
+```
+; 변수
+(var name value)
+(set! name value)
+
+; 출력
+(print expr)
+
+; 산술
+(+ a b)  (- a b)  (* a b)  (/ a b)  (- x)
+
+; 비교 / 논리
+(< a b)  (> a b)  (= a b)
+(and a b)  (or a b)  (not x)
+
+; 제어 흐름
+(if cond then [else])
+(for i start end body)
+{ stmt... }
+
+; 함수
+(func name (params...) body)
+(return value)
+(name args...)
+
+; 배열
+[size]  array[i]  (set-index! arr i val)
+
+; 클래스
+(class Name { (method name (params) { body }) })
+(class Child : Parent { ... })
+(ClassName args...)
+(instance.method args...)
+(get-field instance field)
+(set-field! instance field value)
+(instanceof instance Class)
+(Super.method args...)
+
+; 모듈
+(import "path" alias name)
+(name.func args...)
+```
