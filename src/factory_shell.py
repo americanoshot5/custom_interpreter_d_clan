@@ -76,9 +76,9 @@ class DebugSession:
             return self._add_breakpoint(command)
         if command.startswith("remove "):
             return self._remove_breakpoint(command)
-        if command.startswith("watch "):
+        if command == "watch" or command.startswith("watch "):
             return self._add_watch(command)
-        if command.startswith("unwatch "):
+        if command == "unwatch" or command.startswith("unwatch "):
             return self._remove_watch(command)
         self._write_output(f"Unknown debug command: {command}")
         return False

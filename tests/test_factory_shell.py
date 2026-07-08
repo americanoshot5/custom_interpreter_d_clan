@@ -295,3 +295,95 @@ def test_debug_inspect_reports_empty_scope():
 
     assert exit_code == 0
     assert outputs[-1] == "Scope: empty"
+
+
+def test_debug_watch_tracks_multiple_variables_at_same_stop():
+    source = """
+    (var left 1)
+    (var right 2)
+    """
+    outputs: list[str] = []
+
+    exit_code = factory_shell.run_debug_mode(
+        source,
+        commands=["watch left", "watch right", "step", "step"],
+        write_output=outputs.append,
+    )
+
+    assert exit_code == 0
+    assert "Watch left: 1.0" in outputs
+    assert "Watch right: <undefined>" in outputs
+    assert "Watch right: 2.0" in outputs
+
+
+def test_debug_watch_does_not_duplicate_same_variable():
+    source = """
+    (var total 0)
+    """
+    outputs: list[str] = []
+
+    exit_code = factory_shell.run_debug_mode(
+        source,
+        commands=["watch total", "watch total", "step"],
+        write_output=outputs.append,
+    )
+
+    assert exit_code == 0
+    assert outputs.count("Watch total: 0.0") == 1
+
+
+def test_debug_watch_command_requires_variable_name():
+    outputs: list[str] = []
+
+    exit_code = factory_shell.run_debug_mode(
+        "(print 1)",
+        commands=["watch"],
+        write_output=outputs.append,
+    )
+
+    assert exit_code == 1
+    assert outputs[-1] == "Usage: watch <variable>"
+
+
+def test_debug_unwatch_command_requires_variable_name():
+    outputs: list[str] = []
+
+    exit_code = factory_shell.run_debug_mode(
+        "(print 1)",
+        commands=["unwatch"],
+        write_output=outputs.append,
+    )
+
+    assert exit_code == 1
+    assert outputs[-1] == "Usage: unwatch <variable>"
+
+
+def test_debug_unwatch_unknown_variable_is_noop():
+    outputs: list[str] = []
+
+    exit_code = factory_shell.run_debug_mode(
+        "(print 1)",
+        commands=["unwatch missing", "step"],
+        write_output=outputs.append,
+    )
+
+    assert exit_code == 0
+    assert "Stopped watching missing" in outputs
+    assert all(not line.startswith("Watch missing:") for line in outputs)
+
+
+def test_debug_inspect_prints_scope_variables_in_name_order():
+    source = """
+    (var zeta 1)
+    (var alpha 2)
+    """
+    outputs: list[str] = []
+
+    exit_code = factory_shell.run_debug_mode(
+        source,
+        commands=["step", "step", "inspect"],
+        write_output=outputs.append,
+    )
+
+    assert exit_code == 0
+    assert outputs.index("alpha = 2.0") < outputs.index("zeta = 1.0")
