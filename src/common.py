@@ -22,6 +22,7 @@ class TokenType(str, Enum):
     LESS = "<"
 
     IDENTIFIER = "IDENTIFIER"
+    DOTIDENTIFIER = "DOTIDENTIFIER"
     STRING = "STRING"
     NUMBER = "NUMBER"
 

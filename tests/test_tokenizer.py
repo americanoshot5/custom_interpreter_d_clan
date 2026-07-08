@@ -186,4 +186,5 @@ def test_tokenize_Null_operation():
 def test_tokenize_Dot_operation():
     src = SExpressionTokenizer("Null.Null")
     tokens = src.tokenize()
-    assert tokens[0].type == TokenType.IDENTIFIER
+    assert tokens[0].type == TokenType.DOTIDENTIFIER
+    assert tokens[0].literal == "Null.Null"
