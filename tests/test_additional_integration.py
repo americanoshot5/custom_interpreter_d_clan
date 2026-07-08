@@ -63,6 +63,34 @@ def test_return_outside_function_raises_check_error():
         _run("(return 5)")
 
 
+def test_function_duplicate_parameter_name_raises_check_error():
+    source = """
+    (func bad (a a)
+      { (return a) })
+    """
+    with pytest.raises(CheckError, match="parameter|duplicate|already declared"):
+        _run(source)
+
+
+def test_calling_non_function_value_raises_execute_error():
+    source = """
+    (var x "hello")
+    (x)
+    """
+    with pytest.raises(ExecuteError, match="not callable|function|call"):
+        _run(source)
+
+
+def test_return_without_value_returns_null(capsys):
+    source = """
+    (func noop ()
+      { (return) })
+    (print (noop))
+    """
+    _run(source)
+    assert capsys.readouterr().out.strip() == "None"
+
+
 def test_function_call_argument_count_mismatch_raises_execute_error():
     source = """
     (func add3 (a b c)
@@ -130,6 +158,64 @@ def test_this_outside_class_raises_check_error():
         _run("(print This)")
 
 
+def test_init_return_value_raises_check_error():
+    source = """
+    (class Robot {
+      (method init () { (return 5) })
+    })
+    """
+    with pytest.raises(CheckError, match="init.*return"):
+        _run(source)
+
+
+def test_class_cannot_inherit_from_itself():
+    with pytest.raises(CheckError, match="inherit.*itself|self inheritance"):
+        _run("(class Robot : Robot {})")
+
+
+def test_class_cannot_inherit_from_non_class():
+    source = """
+    (var x 10)
+    (class Robot : x {})
+    """
+    with pytest.raises(CheckError, match="superclass|inherit.*class|not a class"):
+        _run(source)
+
+
+def test_super_outside_class_raises_check_error():
+    with pytest.raises(CheckError, match="Super.*outside class|super.*outside class"):
+        _run("(Super.move)")
+
+
+def test_super_in_class_without_parent_raises_check_error():
+    source = """
+    (class Robot {
+      (method move () { (Super.move) })
+    })
+    """
+    with pytest.raises(CheckError, match="Super.*parent|superclass|without parent"):
+        _run(source)
+
+
+def test_field_access_on_non_instance_raises_execute_error():
+    source = """
+    (var x "hello")
+    (set-field! x speed 10)
+    """
+    with pytest.raises(ExecuteError, match="instance|field|object"):
+        _run(source)
+
+
+def test_missing_method_call_raises_execute_error():
+    source = """
+    (class Robot {})
+    (var r (Robot))
+    (r.notExist)
+    """
+    with pytest.raises(ExecuteError, match="method|notExist|field"):
+        _run(source)
+
+
 # ============================================================
 # 3-3. static array: fixed size, indexing, runtime errors
 # ============================================================
@@ -165,6 +251,43 @@ def test_static_array_non_numeric_size_raises_execute_error():
         _run('(var arr (Array "hi"))')
 
 
+def test_static_array_defaults_to_null(capsys):
+    source = """
+    (var arr (Array 2))
+    (print (index arr 0))
+    (print (index arr 1))
+    """
+    _run(source)
+    assert capsys.readouterr().out.splitlines() == ["None", "None"]
+
+
+def test_static_array_non_numeric_index_raises_execute_error():
+    source = """
+    (var arr (Array 3))
+    (print (index arr "hello"))
+    """
+    with pytest.raises(ExecuteError, match="index.*number|numeric index"):
+        _run(source)
+
+
+def test_static_array_write_out_of_bounds_raises_execute_error():
+    source = """
+    (var arr (Array 3))
+    (set-index! arr 3 10)
+    """
+    with pytest.raises(ExecuteError, match="index|bounds|range"):
+        _run(source)
+
+
+def test_static_array_index_on_non_array_raises_execute_error():
+    source = """
+    (var x 10)
+    (print (index x 0))
+    """
+    with pytest.raises(ExecuteError, match="array|index"):
+        _run(source)
+
+
 # ============================================================
 # 3-4. pre-execution optimization
 # ============================================================
@@ -187,6 +310,31 @@ def test_optimizer_preserves_result_for_static_binding_and_constant_folding(caps
     check(optimized)
     execute(optimized)
     assert capsys.readouterr().out.strip() == "36.0"
+
+
+def test_optimizer_records_static_binding_distances():
+    optimizer = importlib.import_module("Optimizer")
+    source = """
+    (var a 1)
+    { { { (print a) } } }
+    """
+    program = assemble(tokenize(source))
+    check(program)
+
+    bindings = optimizer.resolve_bindings(program)
+
+    assert bindings.lookup("a").distance == 3
+
+
+def test_optimizer_constant_folds_literal_expression_without_runtime_calculation():
+    optimizer = importlib.import_module("Optimizer")
+    source = "(+ 1 (* 2 3))"
+    program = assemble(tokenize(source))
+
+    optimized = optimizer.fold_constants(program)
+
+    assert execute(optimized) == 7.0
+    assert optimizer.optimization_stats(optimized)["folded_expressions"] >= 1
 
 
 # ============================================================
@@ -219,6 +367,53 @@ def test_import_cycle_raises_check_error(tmp_path):
 
     with pytest.raises(CheckError, match="cycle|circular|순환"):
         _run(f'(import "{a}" alias a)')
+
+
+def test_import_path_must_be_string_literal():
+    with pytest.raises(CheckError, match="import.*string|path.*literal"):
+        _run("(import sum.cf alias sum)")
+
+
+def test_import_missing_file_raises_check_error(tmp_path):
+    missing = tmp_path / "missing.cf"
+    with pytest.raises(CheckError, match="not found|missing|없"):
+        _run(f'(import "{missing}" alias missing)')
+
+
+def test_import_same_file_twice_in_same_scope_raises_check_error(tmp_path):
+    lib = tmp_path / "sum.cf"
+    lib.write_text("(var answer 42)", encoding="utf-8")
+    source = f"""
+    (import "{lib}" alias sum)
+    (import "{lib}" alias sumAgain)
+    """
+    with pytest.raises(CheckError, match="duplicate import|already imported"):
+        _run(source)
+
+
+def test_import_alias_collision_raises_check_error(tmp_path):
+    lib = tmp_path / "sum.cf"
+    lib.write_text("(var answer 42)", encoding="utf-8")
+    source = f"""
+    (var sum 0)
+    (import "{lib}" alias sum)
+    """
+    with pytest.raises(CheckError, match="alias|already declared|collision"):
+        _run(source)
+
+
+def test_imported_alias_is_scoped_to_import_block(tmp_path):
+    lib = tmp_path / "sum.cf"
+    lib.write_text("(var answer 42)", encoding="utf-8")
+    source = f"""
+    {{
+      (import "{lib}" alias sum)
+      (print sum.answer)
+    }}
+    (print sum.answer)
+    """
+    with pytest.raises(CheckError, match="scope|alias.*sum|sum\\.answer"):
+        _run(source)
 
 
 def test_import_inside_for_loop_raises_check_error(tmp_path):
@@ -262,6 +457,41 @@ def test_factory_shell_file_mode_reports_missing_file(tmp_path):
     assert any("not found" in line.lower() or "없" in line for line in outputs)
 
 
+def test_factory_shell_prompt_mode_preserves_session_state():
+    factory_shell = importlib.import_module("factory_shell")
+    outputs: list[str] = []
+
+    exit_code = factory_shell.run_prompt_mode(
+        read_line=iter(
+            ["(var total 1)", "", "(set! total (+ total 2))", "", "(print total)", "", "exit"]
+        ).__next__,
+        write_output=outputs.append,
+    )
+
+    assert exit_code == 0
+    assert outputs[-1] == "3.0"
+
+
+def test_factory_shell_file_mode_reports_runtime_error_line_and_stops(tmp_path):
+    factory_shell = importlib.import_module("factory_shell")
+    source_file = tmp_path / "program.cf"
+    source_file.write_text(
+        """
+        (print 1)
+        (print notDefined)
+        (print 3)
+        """,
+        encoding="utf-8",
+    )
+    outputs: list[str] = []
+
+    exit_code = factory_shell.run_file_mode(str(source_file), write_output=outputs.append)
+
+    assert exit_code != 0
+    assert any("line" in line.lower() and "3" in line for line in outputs)
+    assert all("3.0" not in line for line in outputs)
+
+
 def test_factory_shell_debug_mode_supports_watch_and_step():
     factory_shell = importlib.import_module("factory_shell")
     outputs: list[str] = []
@@ -279,3 +509,23 @@ def test_factory_shell_debug_mode_supports_watch_and_step():
 
     assert exit_code == 0
     assert any("total" in line and "3.0" in line for line in outputs)
+
+
+def test_factory_shell_debug_mode_supports_breakpoint_continue_and_inspect():
+    factory_shell = importlib.import_module("factory_shell")
+    outputs: list[str] = []
+    source = """
+    (var total 0)
+    (set! total (+ total 1))
+    (set! total (+ total 2))
+    """
+
+    exit_code = factory_shell.run_debug_mode(
+        source,
+        commands=["break 3", "continue", "inspect", "remove 3", "breakpoints", "continue"],
+        write_output=outputs.append,
+    )
+
+    assert exit_code == 0
+    assert any("total" in line and "1.0" in line for line in outputs)
+    assert any("breakpoints" in line.lower() and "3" not in line for line in outputs)
