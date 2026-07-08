@@ -3,10 +3,14 @@ from __future__ import annotations
 import operator as _op
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, ClassVar
 
 from common import *
 from interfaces import *
+from Tokenizer import tokenize
+from Assembler import assemble
+from Checker import check
 
 # ── 연산자 테이블 ─────────────────────────────────────────────────────────────
 #
@@ -36,7 +40,7 @@ _BINARY: dict[str, Callable[[RuntimeValue, RuntimeValue], RuntimeValue]] = {
 BindingMap = dict[int, int]
 
 _ARRAY_OPS: frozenset[str] = frozenset({"Array", "index", "set-index!"})
-_ALL_OPS: frozenset[str] = frozenset(_UNARY) | frozenset(_BINARY) | _ARRAY_OPS | {"instanceof", "return"}
+_ALL_OPS: frozenset[str] = frozenset(_UNARY) | frozenset(_BINARY) | _ARRAY_OPS | {"instanceof"}
 
 # ── 함수 런타임 값 / 반환 시그널 ──────────────────────────────────────────────
 
@@ -50,6 +54,12 @@ class Function:
 class _ReturnSignal(Exception):
     def __init__(self, value: "RuntimeValue") -> None:
         self.value = value
+
+
+@dataclass
+class Module:
+    name: str
+    environment: "Environment"
 # ── 런타임 객체 ───────────────────────────────────────────────────────────────
 
 @dataclass
@@ -143,6 +153,7 @@ class SExpressionExecutor(Executor):
         FuncDefStmt:    "_execute_funcdefstmt",
         ReturnStmt:     "_execute_returnstmt",
         ClassStmt:      "_execute_classstmt",
+        ImportStmt:     "_execute_importstmt",
     }
 
     def __init__(self, bindings: BindingMap | None = None):
@@ -260,6 +271,24 @@ class SExpressionExecutor(Executor):
         self._environment.define(stmt.name, class_def)
         return None
 
+    def _execute_importstmt(self, stmt: ImportStmt) -> RuntimeValue:
+        path = stmt.path.value  # Checker 가 이미 문자열 리터럴임을 검증했다
+        source = Path(path).read_text(encoding="utf-8-sig")
+        imported_program = assemble(tokenize(source))
+        check(imported_program)
+
+        module_env = Environment()
+        previous = self._environment
+        self._environment = module_env
+        try:
+            for s in imported_program.statements:
+                self._execute_stmt(s)
+        finally:
+            self._environment = previous
+
+        self._environment.define(stmt.alias, Module(name=stmt.alias, environment=module_env))
+        return None
+
     # ── 식(Expr) 평가 ─────────────────────────────────────────────────────────
 
     def _execute_expr(self, expr: Expr) -> RuntimeValue:
@@ -324,10 +353,6 @@ class SExpressionExecutor(Executor):
 
         if not isinstance(op, str):
             raise ExecuteError(f"'{op}' is not callable")
-
-        # return: 현재는 값을 그대로 반환 (함수 기능 구현 전 임시)
-        if op == "return":
-            return self._execute_expr(expr.elements[1]) if len(expr.elements) > 1 else None
 
         # instanceof 특수 처리
         if op == "instanceof":
@@ -443,6 +468,18 @@ class SExpressionExecutor(Executor):
 
     def _execute_dot_expr(self, expr: DotExpr) -> RuntimeValue:
         obj = self._execute_expr(expr.obj)
+
+        if isinstance(obj, Module):
+            value = obj.environment.lookup(expr.slot)
+            args = [self._execute_expr(a) for a in expr.args]
+            if not args:
+                return value
+            if not isinstance(value, Function):
+                raise ExecuteError(
+                    f"'{expr.slot}' is not callable in module '{obj.name}'"
+                )
+            return self._call_function(value, args)
+
         if not isinstance(obj, ClassInstance):
             raise ExecuteError(
                 f"'.' operator requires an instance object, got {type(obj).__name__!r}"

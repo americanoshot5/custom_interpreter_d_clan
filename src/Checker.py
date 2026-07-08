@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import ClassVar
 
 from common import (
@@ -16,6 +17,7 @@ from common import (
     FuncDefStmt,
     IdentifierExpr,
     IfStmt,
+    ImportStmt,
     ListExpr,
     LiteralExpr,
     NewExpr,
@@ -29,6 +31,8 @@ from common import (
     VarStmt,
 )
 from interfaces import Checker
+from Tokenizer import tokenize
+from Assembler import assemble
 
 
 class _ScopeStack:
@@ -53,21 +57,33 @@ class _ScopeStack:
             {name: None for name in BUILTIN_OPS}
         ]
         self._class_names_stack: list[set[str]] = [set()]
+        self._imported_paths_stack: list[set[str]] = [set()]
         self._declaring: str | None = None
 
     def push(self) -> None:
         self._stack.append({})
         self._class_names_stack.append(set())
+        self._imported_paths_stack.append(set())
 
     def pop(self) -> None:
         self._stack.pop()
         self._class_names_stack.pop()
+        self._imported_paths_stack.pop()
 
     def add_class_name(self, name: str) -> None:
         self._class_names_stack[-1].add(name)
 
     def is_class_name(self, name: str) -> bool:
         return any(name in level for level in reversed(self._class_names_stack))
+
+    def mark_imported(self, abs_path: str) -> bool:
+        """현재(가장 안쪽) 스코프에 이 경로가 이미 임포트돼 있으면 False,
+        아니면 등록하고 True 를 반환한다."""
+        current = self._imported_paths_stack[-1]
+        if abs_path in current:
+            return False
+        current.add(abs_path)
+        return True
 
     def declare(self, name: str, location: SourceLocation | None) -> None:
         """현재 스코프에 name 을 등록한다. 같은 스코프 내 중복이면 CheckError."""
@@ -128,11 +144,16 @@ class SExpressionChecker(Checker):
         FuncDefStmt:    "_check_func_stmt",
         ReturnStmt:     "_check_return_stmt",
         ClassStmt:      "_check_class_stmt",
+        ImportStmt:     "_check_import_stmt",
     }
 
     def check(self, program: Program) -> None:
         scopes = _ScopeStack()
         self._method_stack: list[dict] = []  # [{class_name, has_parent, is_init}]
+        self._import_stack: list[str] = []  # 순환 임포트 감지용 (절대경로 스택)
+        self._check_program(program, scopes)
+
+    def _check_program(self, program: Program, scopes: _ScopeStack) -> None:
         for stmt in program.statements:
             self._check_stmt(stmt, scopes)
 
@@ -148,17 +169,7 @@ class SExpressionChecker(Checker):
         self._check_expr(stmt.expression, scopes)
 
     def _check_exprstmt(self, stmt: ExpressionStmt, scopes: _ScopeStack) -> None:
-        expr = stmt.expression
-        # 'init' 메서드 내부에서 return 값 사용 검사
-        if (isinstance(expr, ListExpr) and
-                expr.elements and
-                isinstance(expr.elements[0], IdentifierExpr) and
-                expr.elements[0].name == "return" and
-                len(expr.elements) > 1 and
-                self._method_stack and
-                self._method_stack[-1]["is_init"]):
-            raise CheckError("'init' method cannot use 'return' with a value")
-        self._check_expr(expr, scopes)
+        self._check_expr(stmt.expression, scopes)
 
     def _check_set_stmt(self, stmt: SetStmt, scopes: _ScopeStack) -> None:
         scopes.resolve(stmt.target, stmt.location)
@@ -184,11 +195,16 @@ class SExpressionChecker(Checker):
             self._check_stmt(stmt.else_branch, scopes)
 
     def _check_for_stmt(self, stmt: ForStmt, scopes: _ScopeStack) -> None:
+        # start / end 는 for 스코프 밖(현재 스코프)에서 평가된다
         self._check_expr(stmt.start, scopes)
         self._check_expr(stmt.end, scopes)
+
+        # 반복자 변수는 for 전용 스코프에 선언한다
         scopes.push()
         scopes.declare(stmt.iterator, stmt.location)
+        self._in_for = getattr(self, "_in_for", 0) + 1
         self._check_stmt(stmt.body, scopes)
+        self._in_for -= 1
         scopes.pop()
 
     def _check_func_stmt(self, stmt: FuncDefStmt, scopes: _ScopeStack) -> None:
@@ -208,12 +224,10 @@ class SExpressionChecker(Checker):
         in_method = bool(self._method_stack)
         if not in_function and not in_method:
             raise CheckError("'return' is used outside function")
-        # init 메서드에서 값 반환 금지 (함수 안이 아닐 때만 — 함수 안에서는 허용)
-        if in_method and not in_function and stmt.value is not None:
-            if self._method_stack[-1]["is_init"]:
-                raise CheckError("'init' method cannot use 'return' with a value")
         if stmt.value is not None:
             self._check_expr(stmt.value, scopes)
+            if in_method and self._method_stack[-1]["is_init"]:
+                raise CheckError("'init' method cannot use 'return' with a value")
 
     def _check_class_stmt(self, stmt: ClassStmt, scopes: _ScopeStack) -> None:
         # 자기 자신 상속 검사
@@ -244,6 +258,39 @@ class SExpressionChecker(Checker):
                 self._check_stmt(s, scopes)
             scopes.pop()
             self._method_stack.pop()
+
+    def _check_import_stmt(self, stmt: ImportStmt, scopes: _ScopeStack) -> None:
+        loc = stmt.location
+        loc_str = f" at {loc.line}:{loc.column}" if loc else ""
+
+        if getattr(self, "_in_for", 0) > 0:
+            raise CheckError(f"'import' cannot be used inside a for loop{loc_str}")
+
+        if not isinstance(stmt.path, LiteralExpr) or not isinstance(stmt.path.value, str):
+            raise CheckError(f"import path must be a string literal{loc_str}")
+
+        path = stmt.path.value
+        file_path = Path(path)
+        if not file_path.exists():
+            raise CheckError(f"Imported file not found: '{path}'{loc_str}")
+
+        abs_path = str(file_path.resolve())
+        if abs_path in self._import_stack:
+            raise CheckError(f"Circular import (순환 참조) detected: '{path}'{loc_str}")
+        if not scopes.mark_imported(abs_path):
+            raise CheckError(
+                f"'{path}' is already imported in this scope (duplicate import){loc_str}"
+            )
+
+        source = file_path.read_text(encoding="utf-8-sig")
+        self._import_stack.append(abs_path)
+        try:
+            imported_program = assemble(tokenize(source))
+            self._check_program(imported_program, _ScopeStack())
+        finally:
+            self._import_stack.pop()
+
+        scopes.declare(stmt.alias, stmt.location)
 
     # ── 식(Expr) ──────────────────────────────────────────────────────────────
 

@@ -15,14 +15,18 @@ import pytest
 from common import (
     AssembleError,
     BlockStmt,
+    DotExpr,
     ExpressionStmt,
     ForStmt,
+    FuncDefStmt,
     IdentifierExpr,
     IfStmt,
     ListExpr,
     LiteralExpr,
+    NewExpr,
     PrintStmt,
     Program,
+    ReturnStmt,
     SourceLocation,
     Token,
     TokenType,
@@ -95,6 +99,30 @@ def test_assemble_nested_list_expression():
     assert isinstance(inner_head, IdentifierExpr) and inner_head.name == "*"
     assert inner_a.value == 2.0
     assert inner_b.value == 3.0
+
+
+def test_assemble_new_expr():
+    """(new Foo 1 2) 는 NewExpr(class_name='Foo', args=(1.0, 2.0)) 로 파싱되어야 한다.
+
+    회귀 테스트: NewExpr 에 @dataclass(frozen=True, slots=True) 데코레이터가
+    빠져 있으면 Expr 의 kw_only __init__ 을 상속받아 class_name/args 키워드
+    인자를 받아들이지 못하고 TypeError 가 발생한다.
+    """
+    tokens = [
+        lparen(),
+        tok(TokenType.NEW, "new"),
+        ident("Foo"),
+        num(1.0),
+        num(2.0),
+        rparen(),
+        eof(),
+    ]
+    expr = unwrap(tokens)
+    assert isinstance(expr, NewExpr)
+    assert expr.class_name == "Foo"
+    assert len(expr.args) == 2
+    assert expr.args[0].value == 1.0
+    assert expr.args[1].value == 2.0
 
 
 def test_assemble_missing_closing_paren_raises():
@@ -299,6 +327,20 @@ def test_operator_plus_becomes_identifier():
     expr = unwrap([tok(TokenType.PLUS, "+"), eof()])
     assert isinstance(expr, IdentifierExpr)
     assert expr.name == "+"
+
+
+def test_dotidentifier_atom_becomes_dot_expr():
+    """호출 위치가 아닌 곳의 obj.slot 도 DotExpr 로 분해되어야 한다."""
+    from common import DotExpr
+
+    expr = unwrap(
+        [tok(TokenType.DOTIDENTIFIER, "sum.answer", literal="sum.answer"), eof()]
+    )
+    assert isinstance(expr, DotExpr)
+    assert isinstance(expr.obj, IdentifierExpr)
+    assert expr.obj.name == "sum"
+    assert expr.slot == "answer"
+    assert expr.args == ()
 
 
 # ============================================================
@@ -1106,3 +1148,210 @@ def test_unclosed_block_raises():
     tokens = [lbrace(), lparen(), kw(TokenType.PRINT), ident("x"), rparen(), eof()]
     with pytest.raises(AssembleError):
         SExpressionAssembler(tokens).assemble()
+
+
+def test_import_stmt_parses_path_and_alias():
+    from common import ImportStmt
+
+    tokens = [
+        lparen(),
+        tok(TokenType.IMPORT, "import"),
+        string("lib.cf"),
+        ident("alias"),
+        ident("sum"),
+        rparen(),
+        eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, ImportStmt)
+    assert isinstance(stmt.path, LiteralExpr)
+    assert stmt.path.value == "lib.cf"
+    assert stmt.alias == "sum"
+
+
+def test_import_stmt_missing_alias_keyword_raises():
+    tokens = [
+        lparen(),
+        tok(TokenType.IMPORT, "import"),
+        string("lib.cf"),
+        ident("sum"),  # 'alias' 키워드 없이 바로 이름
+        rparen(),
+        eof(),
+    ]
+    with pytest.raises(AssembleError):
+        SExpressionAssembler(tokens).assemble()
+# ============================================================
+# 24. FuncDefStmt
+# ============================================================
+
+def test_func_stmt_basic():
+    """(func add (a b) (print a)) → FuncDefStmt(name="add", params=("a","b"), body=PrintStmt)"""
+    tokens = [
+        lparen(), kw(TokenType.FUNC),
+        ident("add"),
+        lparen(), ident("a"), ident("b"), rparen(),
+        lparen(), kw(TokenType.PRINT), ident("a"), rparen(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    assert len(prog.statements) == 1
+    stmt = prog.statements[0]
+    assert isinstance(stmt, FuncDefStmt)
+    assert stmt.name == "add"
+    assert stmt.params == ("a", "b")
+    assert isinstance(stmt.body, PrintStmt)
+
+
+def test_func_stmt_no_params():
+    """(func noop () (print 1)) → FuncDefStmt(params=())"""
+    tokens = [
+        lparen(), kw(TokenType.FUNC),
+        ident("noop"),
+        lparen(), rparen(),
+        lparen(), kw(TokenType.PRINT), num(1.0), rparen(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, FuncDefStmt)
+    assert stmt.name == "noop"
+    assert stmt.params == ()
+
+
+def test_func_stmt_single_param():
+    """(func neg (x) (print x)) → FuncDefStmt(params=("x",))"""
+    tokens = [
+        lparen(), kw(TokenType.FUNC),
+        ident("neg"),
+        lparen(), ident("x"), rparen(),
+        lparen(), kw(TokenType.PRINT), ident("x"), rparen(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, FuncDefStmt)
+    assert stmt.params == ("x",)
+
+
+def test_func_stmt_location():
+    """FuncDefStmt의 location은 여는 괄호 토큰 위치여야 한다."""
+    tokens = [
+        lparen(line=3, col=5), kw(TokenType.FUNC),
+        ident("f"),
+        lparen(), rparen(),
+        lparen(), kw(TokenType.PRINT), num(1.0), rparen(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert stmt.location.line == 3
+    assert stmt.location.column == 5
+
+
+def test_func_stmt_missing_name_raises():
+    """(func (a) (print a)) — 함수 이름 없이 바로 파라미터 리스트가 오면 AssembleError"""
+    tokens = [
+        lparen(), kw(TokenType.FUNC),
+        lparen(), ident("a"), rparen(),
+        lparen(), kw(TokenType.PRINT), ident("a"), rparen(),
+        rparen(), eof(),
+    ]
+    with pytest.raises(AssembleError):
+        SExpressionAssembler(tokens).assemble()
+
+
+def test_func_stmt_missing_param_paren_raises():
+    """(func add a (print a)) — 파라미터 리스트의 ( 없이 IDENTIFIER가 오면 AssembleError"""
+    tokens = [
+        lparen(), kw(TokenType.FUNC),
+        ident("add"),
+        ident("a"),
+        lparen(), kw(TokenType.PRINT), ident("a"), rparen(),
+        rparen(), eof(),
+    ]
+    with pytest.raises(AssembleError):
+        SExpressionAssembler(tokens).assemble()
+
+
+def test_func_stmt_unclosed_param_list_raises():
+    """(func add (a — 파라미터 리스트가 닫히지 않으면 AssembleError"""
+    tokens = [
+        lparen(), kw(TokenType.FUNC),
+        ident("add"),
+        lparen(), ident("a"),
+        eof(),
+    ]
+    with pytest.raises(AssembleError):
+        SExpressionAssembler(tokens).assemble()
+
+
+def test_func_stmt_body_is_block():
+    """(func f () { (print 1) }) — body가 BlockStmt인 경우"""
+    tokens = [
+        lparen(), kw(TokenType.FUNC),
+        ident("f"),
+        lparen(), rparen(),
+        lbrace(), lparen(), kw(TokenType.PRINT), num(1.0), rparen(), rbrace(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, FuncDefStmt)
+    assert isinstance(stmt.body, BlockStmt)
+
+
+# ============================================================
+# 25. ReturnStmt
+# ============================================================
+
+def test_return_stmt_with_value():
+    """(return 42) → ReturnStmt(value=LiteralExpr(42.0))"""
+    tokens = [lparen(), kw(TokenType.RETURN), num(42.0), rparen(), eof()]
+    prog = SExpressionAssembler(tokens).assemble()
+    assert len(prog.statements) == 1
+    stmt = prog.statements[0]
+    assert isinstance(stmt, ReturnStmt)
+    assert isinstance(stmt.value, LiteralExpr)
+    assert stmt.value.value == 42.0
+
+
+def test_return_stmt_no_value():
+    """(return) → ReturnStmt(value=None)"""
+    tokens = [lparen(), kw(TokenType.RETURN), rparen(), eof()]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, ReturnStmt)
+    assert stmt.value is None
+
+
+def test_return_stmt_with_identifier():
+    """(return x) → ReturnStmt(value=IdentifierExpr("x"))"""
+    tokens = [lparen(), kw(TokenType.RETURN), ident("x"), rparen(), eof()]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, ReturnStmt)
+    assert isinstance(stmt.value, IdentifierExpr)
+    assert stmt.value.name == "x"
+
+
+def test_return_stmt_with_expression():
+    """(return (+ 1 2)) → ReturnStmt(value=ListExpr(...))"""
+    tokens = [
+        lparen(), kw(TokenType.RETURN),
+        lparen(), tok(TokenType.PLUS, "+"), num(1.0), num(2.0), rparen(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, ReturnStmt)
+    assert isinstance(stmt.value, ListExpr)
+
+
+def test_return_stmt_location():
+    """ReturnStmt의 location은 여는 괄호 토큰 위치여야 한다."""
+    tokens = [lparen(line=7, col=2), kw(TokenType.RETURN), num(1.0), rparen(), eof()]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert stmt.location.line == 7
+    assert stmt.location.column == 2

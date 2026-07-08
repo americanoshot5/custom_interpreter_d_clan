@@ -24,13 +24,16 @@ from common import (
     CheckError,
     ExpressionStmt,
     ForStmt,
+    FuncDefStmt,
     IdentifierExpr,
     IfStmt,
+    ImportStmt,
     ListExpr,
     LiteralExpr,
     PrintStmt,
     Program,
     SetStmt,
+    ReturnStmt,
     SourceLocation,
     Stmt,
     VarStmt,
@@ -87,6 +90,16 @@ def for_stmt(
     return ForStmt(
         iterator=iterator, start=start, end=end, body=body, location=loc(line, col)
     )
+
+
+def import_stmt(path_expr, alias: str, line: int = 1, col: int = 1) -> ImportStmt:
+    return ImportStmt(path=path_expr, alias=alias, location=loc(line, col))
+def func_def(name: str, params: tuple, body, line: int = 1, col: int = 1) -> FuncDefStmt:
+    return FuncDefStmt(name=name, params=params, body=body, location=loc(line, col))
+
+
+def ret(value=None) -> ReturnStmt:
+    return ReturnStmt(value=value)
 
 
 # ── 기존 스켈레톤 테스트 유지 ────────────────────────────────────────────────
@@ -1040,3 +1053,152 @@ class TestOptimize:
         optimized = optimize(program)
         execute(optimized)
         assert capsys.readouterr().out.strip() == "15.0"
+# ── 10. import 문 ────────────────────────────────────────────────────────────
+
+class TestImportStmt:
+    def test_path_must_be_string_literal(self):
+        program = prog(import_stmt(ident("sum"), alias="sum"))
+        with pytest.raises(CheckError, match="string"):
+            check(program)
+
+    def test_missing_file_raises(self, tmp_path):
+        missing = tmp_path / "missing.cf"
+        program = prog(import_stmt(lit(str(missing)), alias="m"))
+        with pytest.raises(CheckError, match="not found"):
+            check(program)
+
+    def test_valid_import_declares_alias_in_scope(self, tmp_path):
+        lib = tmp_path / "lib.cf"
+        lib.write_text("(var answer 1)", encoding="utf-8")
+        program = prog(
+            import_stmt(lit(str(lib)), alias="m"),
+            print_stmt(ident("m")),
+        )
+        check(program)  # 예외 없이 통과해야 한다
+
+    def test_duplicate_import_same_scope_raises(self, tmp_path):
+        lib = tmp_path / "lib.cf"
+        lib.write_text("(var answer 1)", encoding="utf-8")
+        program = prog(
+            import_stmt(lit(str(lib)), alias="a"),
+            import_stmt(lit(str(lib)), alias="b"),
+        )
+        with pytest.raises(CheckError, match="already imported|duplicate"):
+            check(program)
+
+    def test_alias_collision_with_existing_variable_raises(self, tmp_path):
+        lib = tmp_path / "lib.cf"
+        lib.write_text("(var answer 1)", encoding="utf-8")
+        program = prog(
+            var("sum", init=lit(0.0)),
+            import_stmt(lit(str(lib)), alias="sum"),
+        )
+        with pytest.raises(CheckError, match="already declared"):
+            check(program)
+
+    def test_import_cycle_raises(self, tmp_path):
+        a = tmp_path / "a.cf"
+        b = tmp_path / "b.cf"
+        a.write_text(f'(import "{b}" alias b)', encoding="utf-8")
+        b.write_text(f'(import "{a}" alias a)', encoding="utf-8")
+        program = prog(import_stmt(lit(str(a)), alias="a"))
+        with pytest.raises(CheckError, match="circular|cycle|순환"):
+            check(program)
+
+    def test_import_inside_for_loop_raises(self, tmp_path):
+        lib = tmp_path / "lib.cf"
+        lib.write_text("(var answer 1)", encoding="utf-8")
+        program = prog(
+            for_stmt("i", lit(0.0), lit(1.0), import_stmt(lit(str(lib)), alias="m")),
+        )
+        with pytest.raises(CheckError, match="for|loop"):
+            check(program)
+
+    def test_imported_file_own_errors_propagate_as_check_error(self, tmp_path):
+        lib = tmp_path / "broken.cf"
+        lib.write_text("(print notDefined)", encoding="utf-8")
+        program = prog(import_stmt(lit(str(lib)), alias="m"))
+        with pytest.raises(CheckError, match="notDefined"):
+            check(program)
+# ── 10. FuncDefStmt / ReturnStmt 검사 ────────────────────────────────────────
+
+class TestFuncDefStmt:
+    def test_func_valid_declaration(self):
+        StaticChecker().check(prog(
+            func_def("add", ("a", "b"), print_stmt(lit(1.0)))
+        ))
+
+    def test_func_params_visible_in_body(self):
+        StaticChecker().check(prog(
+            func_def("add", ("a", "b"),
+                print_stmt(list_expr(ident("+"), ident("a"), ident("b"))))
+        ))
+
+    def test_func_name_declared_in_outer_scope(self):
+        StaticChecker().check(prog(
+            func_def("add", ("a", "b"), print_stmt(lit(0.0))),
+            expr_stmt(ident("add")),
+        ))
+
+    def test_func_recursive_call_allowed(self):
+        StaticChecker().check(prog(
+            func_def("fac", ("n",),
+                print_stmt(list_expr(ident("fac"), ident("n"))))
+        ))
+
+    def test_func_duplicate_param_raises(self):
+        with pytest.raises(CheckError, match="already declared"):
+            StaticChecker().check(prog(
+                func_def("f", ("x", "x"), print_stmt(lit(0.0)))
+            ))
+
+    def test_func_params_not_visible_outside(self):
+        with pytest.raises(CheckError, match="Undefined variable 'a'"):
+            StaticChecker().check(prog(
+                func_def("add", ("a", "b"), print_stmt(lit(0.0))),
+                expr_stmt(ident("a")),
+            ))
+
+    def test_func_undefined_var_in_body_raises(self):
+        with pytest.raises(CheckError, match="Undefined variable 'missing'"):
+            StaticChecker().check(prog(
+                func_def("f", ("x",), print_stmt(ident("missing")))
+            ))
+
+    def test_return_inside_function_valid(self):
+        StaticChecker().check(prog(
+            func_def("f", ("x",), block(ret(ident("x"))))
+        ))
+
+    def test_return_no_value_inside_function_valid(self):
+        StaticChecker().check(prog(
+            func_def("f", ("x",), block(ret()))
+        ))
+
+    def test_return_outside_function_raises(self):
+        with pytest.raises(CheckError, match="outside function"):
+            StaticChecker().check(prog(ret(lit(1.0))))
+
+    def test_return_value_checked_for_undefined_var(self):
+        with pytest.raises(CheckError, match="Undefined variable 'ghost'"):
+            StaticChecker().check(prog(
+                func_def("f", (), block(ret(ident("ghost"))))
+            ))
+
+    def test_func_name_duplicate_with_outer_var_raises(self):
+        with pytest.raises(CheckError, match="already declared"):
+            StaticChecker().check(prog(
+                var("f", lit(1.0)),
+                func_def("f", (), print_stmt(lit(0.0))),
+            ))
+
+    def test_func_outer_var_visible_in_body(self):
+        StaticChecker().check(prog(
+            var("global_x", lit(10.0)),
+            func_def("use_global", (),
+                print_stmt(ident("global_x"))),
+        ))
+
+    def test_return_outside_function_top_level_raises(self):
+        with pytest.raises(CheckError):
+            StaticChecker().check(prog(ret()))
