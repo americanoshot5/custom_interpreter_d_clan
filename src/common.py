@@ -39,6 +39,7 @@ class TokenType(str, Enum):
     AND = "and"
     OR = "or"
     PRINT = "print"
+    IMPORT = "import"
     FUNC = "func"
     RETURN = "return"
 
@@ -63,6 +64,7 @@ KEYWORDS: dict[str, TokenType] = {
     "and": TokenType.AND,
     "or": TokenType.OR,
     "print": TokenType.PRINT,
+    "import": TokenType.IMPORT,
     "null": TokenType.NULL,
     "func": TokenType.FUNC,
     "return": TokenType.RETURN,
@@ -164,6 +166,7 @@ class ArrayIndexExpr(Expr):
     array: Expr
     index: Expr
 
+@dataclass(frozen=True, slots=True)
 class NewExpr(Expr):
     """(new ClassName args...)"""
     class_name: str
@@ -223,6 +226,11 @@ class ForStmt(Stmt):
     start: Expr
     end: Expr
     body: Stmt
+
+@dataclass(frozen=True, slots=True)
+class ImportStmt(Stmt):
+    path: Expr
+    alias: str
 
 
 # ── Class-related nodes ───────────────────────────────────────────────────────
@@ -300,6 +308,7 @@ __all__ = [
     "FuncDefStmt",
     "IdentifierExpr",
     "IfStmt",
+    "ImportStmt",
     "KEYWORDS",
     "LanguageError",
     "ListExpr",

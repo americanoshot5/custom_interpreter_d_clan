@@ -181,6 +181,17 @@ def test_execute_error_varstmt():
     with pytest.raises(ExecuteError):
         calc._environment.lookup('test_fail')
 
+
+def test_execute_import_defines_module_and_reads_variable(tmp_path):
+    lib = tmp_path / "lib.cf"
+    lib.write_text("(var answer 42)", encoding="utf-8")
+    program = Program((
+        ImportStmt(path=LiteralExpr(str(lib)), alias="m"),
+        ExpressionStmt(DotExpr(obj=IdentifierExpr("m"), slot="answer", args=())),
+    ))
+    assert execute(program) == 42.0
+
+
 def test_execute_funcstmt(capsys):
     func_name = "add"
     func_params = ("a","b")
@@ -233,6 +244,48 @@ def test_execute_func_no_params():
     assert execute(program) == 42.0
 
 
+def test_execute_import_isolates_module_namespace(tmp_path):
+    """임포트한 파일 안의 변수는 메인 프로그램 스코프로 새지 않는다."""
+    lib = tmp_path / "lib.cf"
+    lib.write_text("(var secret 1)", encoding="utf-8")
+    program = Program((
+        ImportStmt(path=LiteralExpr(str(lib)), alias="m"),
+        ExpressionStmt(IdentifierExpr("secret")),
+    ))
+    with pytest.raises(ExecuteError):
+        execute(program)
+
+
+def test_execute_dot_expr_calls_function_member_of_module(tmp_path):
+    lib = tmp_path / "lib.cf"
+    lib.write_text(
+        "(func add (a b) { (return (+ a b)) })",
+        encoding="utf-8",
+    )
+    program = Program((
+        ImportStmt(path=LiteralExpr(str(lib)), alias="m"),
+        ExpressionStmt(
+            DotExpr(
+                obj=IdentifierExpr("m"),
+                slot="add",
+                args=(LiteralExpr(1.0), LiteralExpr(2.0)),
+            )
+        ),
+    ))
+    assert execute(program) == 3.0
+
+
+def test_execute_dot_expr_missing_module_member_raises(tmp_path):
+    lib = tmp_path / "lib.cf"
+    lib.write_text("(var answer 42)", encoding="utf-8")
+    program = Program((
+        ImportStmt(path=LiteralExpr(str(lib)), alias="m"),
+        ExpressionStmt(DotExpr(obj=IdentifierExpr("m"), slot="missing", args=())),
+    ))
+    with pytest.raises(ExecuteError):
+        execute(program)
+
+
 def test_execute_func_implicit_none_return():
     program = Program((
         FuncDefStmt(
@@ -266,6 +319,19 @@ def test_execute_func_arg_count_mismatch_raises():
             body=ReturnStmt(LiteralExpr(0.0)),
         ),
         ExpressionStmt(ListExpr((IdentifierExpr("add"), LiteralExpr(1.0)))),
+    ))
+    with pytest.raises(ExecuteError):
+        execute(program)
+
+
+def test_execute_dot_expr_calling_non_function_member_raises(tmp_path):
+    lib = tmp_path / "lib.cf"
+    lib.write_text("(var answer 42)", encoding="utf-8")
+    program = Program((
+        ImportStmt(path=LiteralExpr(str(lib)), alias="m"),
+        ExpressionStmt(
+            DotExpr(obj=IdentifierExpr("m"), slot="answer", args=(LiteralExpr(1.0),))
+        ),
     ))
     with pytest.raises(ExecuteError):
         execute(program)
