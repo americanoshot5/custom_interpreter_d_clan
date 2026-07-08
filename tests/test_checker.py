@@ -18,6 +18,7 @@ import os
 from dataclasses import dataclass
 
 import pytest
+import unittest.mock as umock
 
 from common import (
     BlockStmt,
@@ -830,8 +831,10 @@ class TestStaticBinder:
             print_stmt(list_expr(plus_ref, x_ref, y_ref)),
         )
         binder = StaticBinder()
-        spy = mocker.spy(binder, "_resolve_distance")
-        binder.bind(program)
+        # spy = mocker.spy(binder, "_resolve_distance")
+        # binder.bind(program)
+        with umock.patch.object(binder, "_resolve_distance", wraps=binder._resolve_distance) as spy:
+            binder.bind(program)
         assert spy.call_count == 3  # x, y, + 각 1회
 
     def test_distance_enables_direct_environment_access(self):
@@ -1010,14 +1013,18 @@ class TestConstantFolder:
         program = prog(expr_stmt(outer))
 
         exec_before = SExpressionExecutor()
-        spy_before = mocker.spy(exec_before, "_execute_list_expr")
-        exec_before.execute(program)
+        # spy_before = mocker.spy(exec_before, "_execute_list_expr")
+        # exec_before.execute(program)
+        with umock.patch.object(exec_before, "_execute_list_expr", wraps=exec_before._execute_list_expr) as spy_before:
+            exec_before.execute(program)
         assert spy_before.call_count == 2
 
         folded = ConstantFolder().fold(program)
         exec_after = SExpressionExecutor()
-        spy_after = mocker.spy(exec_after, "_execute_list_expr")
-        exec_after.execute(folded)
+        # spy_after = mocker.spy(exec_after, "_execute_list_expr")
+        # exec_after.execute(folded)
+        with umock.patch.object(exec_after, "_execute_list_expr", wraps=exec_after._execute_list_expr) as spy_after:
+            exec_after.execute(folded)
         assert spy_after.call_count == 0
 
     def test_fold_nested_loop_constant_reduces_repeated_calls(self, mocker):
@@ -1031,14 +1038,18 @@ class TestConstantFolder:
         program = prog(for_stmt("i", lit(0.0), lit(10.0), print_stmt(const_expr)))
 
         exec_before = SExpressionExecutor()
-        spy_before = mocker.spy(exec_before, "_execute_list_expr")
-        exec_before.execute(program)
+        # spy_before = mocker.spy(exec_before, "_execute_list_expr")
+        # exec_before.execute(program)
+        with umock.patch.object(exec_before, "_execute_list_expr", wraps=exec_before._execute_list_expr) as spy_before:
+            exec_before.execute(program)
         assert spy_before.call_count == 10
 
         folded = ConstantFolder().fold(program)
         exec_after = SExpressionExecutor()
         spy_after = mocker.spy(exec_after, "_execute_list_expr")
         exec_after.execute(folded)
+        with umock.patch.object(exec_after, "_execute_list_expr", wraps=exec_after._execute_list_expr) as spy_after:
+            exec_after.execute(folded)
         assert spy_after.call_count == 0
 
     def test_fold_if_condition_constant(self):
