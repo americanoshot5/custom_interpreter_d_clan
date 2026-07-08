@@ -38,6 +38,8 @@ class TokenType(str, Enum):
     AND = "and"
     OR = "or"
     PRINT = "print"
+    FUNC = "func"
+    RETURN = "return"
 
     NOT = "~"
     EOF = "EOF"
@@ -54,7 +56,9 @@ KEYWORDS: dict[str, TokenType] = {
     "and": TokenType.AND,
     "or": TokenType.OR,
     "print": TokenType.PRINT,
-    "null": TokenType.NULL
+    "null": TokenType.NULL,
+    "func": TokenType.FUNC,
+    "return": TokenType.RETURN,
 }
 
 SINGLE_CHAR_TOKENS: dict[str, TokenType] = {
@@ -186,6 +190,18 @@ class ForStmt(Stmt):
 
 
 @dataclass(frozen=True, slots=True)
+class FuncDefStmt(Stmt):
+    name: str
+    params: tuple[str, ...]
+    body: Stmt
+
+
+@dataclass(frozen=True, slots=True)
+class ReturnStmt(Stmt):
+    value: Expr | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Program:
     statements: tuple[Stmt, ...]
 
@@ -224,6 +240,7 @@ __all__ = [
     "Expr",
     "ExpressionStmt",
     "ForStmt",
+    "FuncDefStmt",
     "IdentifierExpr",
     "IfStmt",
     "KEYWORDS",
@@ -234,6 +251,7 @@ __all__ = [
     "Node",
     "PrintStmt",
     "Program",
+    "ReturnStmt",
     "RuntimeValue",
     "SetStmt",
     "SINGLE_CHAR_TOKENS",

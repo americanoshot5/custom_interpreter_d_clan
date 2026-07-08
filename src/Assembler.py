@@ -11,12 +11,14 @@ from common import (
     Expr,
     ExpressionStmt,
     ForStmt,
+    FuncDefStmt,
     IdentifierExpr,
     IfStmt,
     ListExpr,
     LiteralExpr,
     PrintStmt,
     Program,
+    ReturnStmt,
     SetStmt,
     Stmt,
     Token,
@@ -30,11 +32,13 @@ class SExpressionAssembler(Assembler):
 
     # 새로운 special form 추가 시: 이 테이블에 한 줄 + 파서 메서드 하나만 추가하면 됩니다.
     _SPECIAL_FORMS: ClassVar[dict[TokenType, str]] = {
-        TokenType.VAR:   "_parse_var_stmt",
-        TokenType.SET:   "_parse_set_stmt",
-        TokenType.PRINT: "_parse_print_stmt",
-        TokenType.IF:    "_parse_if_stmt",
-        TokenType.FOR:   "_parse_for_stmt",
+        TokenType.VAR:    "_parse_var_stmt",
+        TokenType.SET:    "_parse_set_stmt",
+        TokenType.PRINT:  "_parse_print_stmt",
+        TokenType.IF:     "_parse_if_stmt",
+        TokenType.FOR:    "_parse_for_stmt",
+        TokenType.FUNC:   "_parse_func_stmt",
+        TokenType.RETURN: "_parse_return_stmt",
     }
 
     def __init__(self, tokens: Sequence[Token]) -> None:
@@ -136,6 +140,35 @@ class SExpressionAssembler(Assembler):
             body=body,
             location=open_paren.location,
         )
+
+    def _parse_func_stmt(self, open_paren: Token) -> FuncDefStmt:
+        self._advance()  # consume 'func'
+        name_token = self._consume(TokenType.IDENTIFIER, "Expected function name after 'func'")
+        self._consume(TokenType.LEFT_PAREN, "Expected '(' for parameter list in func")
+        params: list[str] = []
+        while not self._check(TokenType.RIGHT_PAREN):
+            if self._is_at_end():
+                raise AssembleError("Unclosed parameter list in func declaration")
+            param_token = self._consume(TokenType.IDENTIFIER, "Expected parameter name in func")
+            params.append(param_token.lexeme)
+        self._consume(TokenType.RIGHT_PAREN, "Expected ')' to close parameter list in func")
+        body = self._statement()
+        self._consume(TokenType.RIGHT_PAREN, "Expected ')' to close func declaration")
+        return FuncDefStmt(
+            name=name_token.lexeme,
+            params=tuple(params),
+            body=body,
+            location=open_paren.location,
+        )
+
+    def _parse_return_stmt(self, open_paren: Token) -> ReturnStmt:
+        self._advance()  # consume 'return'
+        if self._check(TokenType.RIGHT_PAREN):
+            self._advance()  # consume ')'
+            return ReturnStmt(value=None, location=open_paren.location)
+        value = self._expression()
+        self._consume(TokenType.RIGHT_PAREN, "Expected ')' to close return statement")
+        return ReturnStmt(value=value, location=open_paren.location)
 
     # ── Expression parsers ───────────────────────────────────────────────────
 
