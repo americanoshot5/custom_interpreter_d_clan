@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import ClassVar
 
 from common import (
@@ -16,6 +17,7 @@ from common import (
     FuncDefStmt,
     IdentifierExpr,
     IfStmt,
+    ImportStmt,
     ListExpr,
     LiteralExpr,
     NewExpr,
@@ -128,11 +130,16 @@ class StaticChecker(Checker):
         FuncDefStmt:    "_check_func_stmt",
         ReturnStmt:     "_check_return_stmt",
         ClassStmt:      "_check_class_stmt",
+        ImportStmt:     "_check_import_stmt",
     }
 
     def check(self, program: Program) -> None:
         scopes = _ScopeStack()
         self._method_stack: list[dict] = []  # [{class_name, has_parent, is_init}]
+        self._import_stack: list[str] = []  # 순환 임포트 감지용 (절대경로 스택)
+        self._check_program(program, scopes)
+
+    def _check_program(self, program: Program, scopes: _ScopeStack) -> None:
         for stmt in program.statements:
             self._check_stmt(stmt, scopes)
 
@@ -232,6 +239,20 @@ class StaticChecker(Checker):
                 self._check_stmt(s, scopes)
             scopes.pop()
             self._method_stack.pop()
+
+    def _check_import_stmt(self, stmt: ImportStmt, scopes: _ScopeStack) -> None:
+        loc = stmt.location
+        loc_str = f" at {loc.line}:{loc.column}" if loc else ""
+
+        if not isinstance(stmt.path, LiteralExpr) or not isinstance(stmt.path.value, str):
+            raise CheckError(f"import path must be a string literal{loc_str}")
+
+        path = stmt.path.value
+        file_path = Path(path)
+        if not file_path.exists():
+            raise CheckError(f"Imported file not found: '{path}'{loc_str}")
+
+        scopes.declare(stmt.alias, stmt.location)
 
     # ── 식(Expr) ──────────────────────────────────────────────────────────────
 

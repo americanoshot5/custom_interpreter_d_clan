@@ -26,6 +26,7 @@ from common import (
     ForStmt,
     IdentifierExpr,
     IfStmt,
+    ImportStmt,
     ListExpr,
     LiteralExpr,
     PrintStmt,
@@ -85,6 +86,10 @@ def for_stmt(
     return ForStmt(
         iterator=iterator, start=start, end=end, body=body, location=loc(line, col)
     )
+
+
+def import_stmt(path_expr, alias: str, line: int = 1, col: int = 1) -> ImportStmt:
+    return ImportStmt(path=path_expr, alias=alias, location=loc(line, col))
 
 
 # ── 기존 스켈레톤 테스트 유지 ────────────────────────────────────────────────
@@ -545,3 +550,27 @@ class TestCheckFunction:
     def test_raises_on_self_reference(self):
         with pytest.raises(CheckError):
             check(prog(var("x", list_expr(ident("+"), ident("x"), lit(1.0)))))
+
+
+# ── 10. import 문 ────────────────────────────────────────────────────────────
+
+class TestImportStmt:
+    def test_path_must_be_string_literal(self):
+        program = prog(import_stmt(ident("sum"), alias="sum"))
+        with pytest.raises(CheckError, match="string"):
+            check(program)
+
+    def test_missing_file_raises(self, tmp_path):
+        missing = tmp_path / "missing.cf"
+        program = prog(import_stmt(lit(str(missing)), alias="m"))
+        with pytest.raises(CheckError, match="not found"):
+            check(program)
+
+    def test_valid_import_declares_alias_in_scope(self, tmp_path):
+        lib = tmp_path / "lib.cf"
+        lib.write_text("(var answer 1)", encoding="utf-8")
+        program = prog(
+            import_stmt(lit(str(lib)), alias="m"),
+            print_stmt(ident("m")),
+        )
+        check(program)  # 예외 없이 통과해야 한다
