@@ -32,6 +32,9 @@ _BINARY: dict[str, Callable[[RuntimeValue, RuntimeValue], RuntimeValue]] = {
     "or":  lambda a, b: a or b,
 }
 
+# 정적 바인딩 맵 타입: id(IdentifierExpr | SetStmt) → scope distance
+BindingMap = dict[int, int]
+
 _ARRAY_OPS: frozenset[str] = frozenset({"Array", "index", "set-index!"})
 _ALL_OPS: frozenset[str] = frozenset(_UNARY) | frozenset(_BINARY) | _ARRAY_OPS | {"instanceof", "return"}
 
@@ -100,6 +103,13 @@ class Environment:
             return self.parent.lookup(name)
         raise ExecuteError(f"Undefined variable '{name}'")
 
+    def lookup_at(self, distance: int, name: str) -> RuntimeValue:
+        """정적 바인딩: distance 단계 위 스코프에서 name을 직접 읽는다."""
+        env: Environment = self
+        for _ in range(distance):
+            env = env.parent  # type: ignore[assignment]
+        return env._values[name]
+
     def assign(self, name: str, value: RuntimeValue) -> None:
         if name in self._values:
             self._values[name] = value
@@ -108,6 +118,13 @@ class Environment:
             self.parent.assign(name, value)
             return
         raise ExecuteError(f"Undefined variable '{name}'")
+
+    def assign_at(self, distance: int, name: str, value: RuntimeValue) -> None:
+        """정적 바인딩: distance 단계 위 스코프에서 name에 직접 쓴다."""
+        env: Environment = self
+        for _ in range(distance):
+            env = env.parent  # type: ignore[assignment]
+        env._values[name] = value
 
 
 # ── 실행기 ────────────────────────────────────────────────────────────────────
@@ -128,8 +145,9 @@ class SExpressionExecutor(Executor):
         ClassStmt:      "_execute_classstmt",
     }
 
-    def __init__(self):
+    def __init__(self, bindings: BindingMap | None = None):
         self._environment = Environment()
+        self._bindings: BindingMap = bindings if bindings is not None else {}
 
     def execute(self, program: Program) -> RuntimeValue:
         result = None
@@ -159,7 +177,11 @@ class SExpressionExecutor(Executor):
 
     def _execute_setstmt(self, stmt: SetStmt) -> RuntimeValue:
         value = self._execute_expr(stmt.value)
-        self._environment.assign(stmt.target, value)
+        node_id = id(stmt)
+        if node_id in self._bindings:
+            self._environment.assign_at(self._bindings[node_id], stmt.target, value)
+        else:
+            self._environment.assign(stmt.target, value)
         return value
 
     def _execute_ifstmt(self, stmt: IfStmt) -> RuntimeValue:
@@ -244,7 +266,12 @@ class SExpressionExecutor(Executor):
         if isinstance(expr, LiteralExpr):
             return expr.value
         if isinstance(expr, IdentifierExpr):
-            return expr.name if expr.name in _ALL_OPS else self._environment.lookup(expr.name)
+            if expr.name in _ALL_OPS:
+                return expr.name
+            node_id = id(expr)
+            if node_id in self._bindings:
+                return self._environment.lookup_at(self._bindings[node_id], expr.name)
+            return self._environment.lookup(expr.name)
         if isinstance(expr, ListExpr):
             return self._execute_list_expr(expr)
         if isinstance(expr, ArrayExpr):
@@ -510,4 +537,4 @@ def execute(program: Program) -> RuntimeValue:
     return SExpressionExecutor().execute(program)
 
 
-__all__ = ["DefaultExecutor", "SExpressionExecutor", "execute"]
+__all__ = ["BindingMap", "DefaultExecutor", "Environment", "SExpressionExecutor", "execute"]
