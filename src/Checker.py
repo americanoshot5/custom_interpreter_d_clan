@@ -282,7 +282,7 @@ class StaticChecker(Checker):
                 f"'{path}' is already imported in this scope (duplicate import){loc_str}"
             )
 
-        source = file_path.read_text(encoding="utf-8")
+        source = file_path.read_text(encoding="utf-8-sig")
         self._import_stack.append(abs_path)
         try:
             imported_program = assemble(tokenize(source))

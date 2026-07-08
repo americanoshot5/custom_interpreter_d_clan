@@ -251,7 +251,7 @@ class SExpressionExecutor(Executor):
 
     def _execute_importstmt(self, stmt: ImportStmt) -> RuntimeValue:
         path = stmt.path.value  # Checker 가 이미 문자열 리터럴임을 검증했다
-        source = Path(path).read_text(encoding="utf-8")
+        source = Path(path).read_text(encoding="utf-8-sig")
         imported_program = assemble(tokenize(source))
         check(imported_program)
 
