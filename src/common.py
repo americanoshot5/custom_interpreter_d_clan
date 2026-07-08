@@ -11,6 +11,8 @@ class TokenType(str, Enum):
     RIGHT_PAREN = ")"
     LEFT_BRACE = "{"
     RIGHT_BRACE = "}"
+    LEFT_BRACKET = "["
+    RIGHT_BRACKET = "]"
     SEMICOLON = ";"
 
     PLUS = "+"
@@ -64,6 +66,8 @@ SINGLE_CHAR_TOKENS: dict[str, TokenType] = {
     ")": TokenType.RIGHT_PAREN,
     "{": TokenType.LEFT_BRACE,
     "}": TokenType.RIGHT_BRACE,
+    "[": TokenType.LEFT_BRACKET,
+    "]": TokenType.RIGHT_BRACKET,
     ";": TokenType.SEMICOLON,
     "+": TokenType.PLUS,
     "-": TokenType.MINUS,
@@ -87,6 +91,7 @@ SINGLE_INVALID_CHAR_TOKENS: dict[str, str] = {
 BUILTIN_OPS: frozenset[str] = frozenset({
     "+", "-", "*", "/", "<", ">", "=",
     "and", "or", "not",
+    "Array", "index", "set-index!",
 })
 
 LiteralValue = str | float | bool | None
@@ -133,6 +138,15 @@ class IdentifierExpr(Expr):
 @dataclass(frozen=True, slots=True)
 class ListExpr(Expr):
     elements: tuple[Expr, ...]
+
+@dataclass(frozen=True, slots=True)
+class ArrayExpr(Expr):
+    size: Expr
+
+@dataclass(frozen=True, slots=True)
+class ArrayIndexExpr(Expr):
+    array: Expr
+    index: Expr
 
 @dataclass(frozen=True, slots=True)
 class ExpressionStmt(Stmt):
@@ -216,6 +230,8 @@ RuntimeValue = Any
 
 
 __all__ = [
+    "ArrayExpr",
+    "ArrayIndexExpr",
     "AssembleError",
     "BUILTIN_OPS",
     "BlockStmt",

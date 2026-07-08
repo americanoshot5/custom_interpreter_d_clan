@@ -4,6 +4,8 @@ from collections.abc import Sequence
 from typing import ClassVar
 
 from common import (
+    ArrayExpr,
+    ArrayIndexExpr,
     AssembleError,
     BlockStmt,
     Expr,
@@ -173,8 +175,24 @@ class SExpressionAssembler(Assembler):
     def _expression(self) -> Expr:
         token = self._advance()
         if token.type is TokenType.LEFT_PAREN:
-            return self._parse_list(token)
-        return self._parse_atom(token)
+            expr = self._parse_list(token)
+        elif token.type is TokenType.LEFT_BRACKET:
+            expr = self._parse_array(token)
+        else:
+            expr = self._parse_atom(token)
+
+        while self._check(TokenType.LEFT_BRACKET):
+            bracket = self._advance()
+            index = self._expression()
+            self._consume(TokenType.RIGHT_BRACKET, "Expected ']' to close array index")
+            expr = ArrayIndexExpr(array=expr, index=index, location=bracket.location)
+
+        return expr
+
+    def _parse_array(self, open_bracket: Token) -> ArrayExpr:
+        size = self._expression()
+        self._consume(TokenType.RIGHT_BRACKET, "Expected ']' to close array literal")
+        return ArrayExpr(size=size, location=open_bracket.location)
 
     def _parse_list(self, open_paren: Token) -> ListExpr:
         elements: list[Expr] = []
@@ -193,6 +211,8 @@ class SExpressionAssembler(Assembler):
     def _parse_atom(self, token: Token) -> Expr:
         if token.type is TokenType.RIGHT_PAREN:
             raise AssembleError(f"Unexpected ')' at {token.location.line}:{token.location.column}")
+        if token.type is TokenType.RIGHT_BRACKET:
+            raise AssembleError(f"Unexpected ']' at {token.location.line}:{token.location.column}")
         if token.type in {TokenType.NUMBER, TokenType.STRING, TokenType.TRUE, TokenType.FALSE}:
             return LiteralExpr(token.literal, location=token.location)
         return IdentifierExpr(token.lexeme, location=token.location)
