@@ -53,9 +53,15 @@ class SExpressionTokenizer(Tokenizer):
             literal = t.strip("\"")
         else:
             self.check_invalid_identifier_name(t)
-            type = TokenType.IDENTIFIER
+            type = self.check_dot_identifier(t)
             literal = t
         self.token.append(Token(type=type, lexeme=t, literal=literal))
+
+    def check_dot_identifier(self, t) -> Literal[TokenType.DOTIDENTIFIER]:
+        if "." in t:
+            return TokenType.DOTIDENTIFIER
+        else:
+            return TokenType.IDENTIFIER
 
     def check_invalid_identifier_name(self, t):
         if "(" in t:

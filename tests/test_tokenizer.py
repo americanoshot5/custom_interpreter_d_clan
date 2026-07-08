@@ -177,3 +177,14 @@ def test_tokenize_Not_operation():
     tokens = src.tokenize()
     assert tokens[0].type == TokenType.NOT
     assert tokens[1].type == TokenType.TRUE
+
+def test_tokenize_Null_operation():
+    src = SExpressionTokenizer("Null")
+    tokens = src.tokenize()
+    assert tokens[0].type == TokenType.NULL
+
+def test_tokenize_Dot_operation():
+    src = SExpressionTokenizer("Null.Null")
+    tokens = src.tokenize()
+    assert tokens[0].type == TokenType.DOTIDENTIFIER
+    assert tokens[0].literal == "Null.Null"

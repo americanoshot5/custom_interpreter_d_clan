@@ -22,6 +22,7 @@ class TokenType(str, Enum):
     LESS = "<"
 
     IDENTIFIER = "IDENTIFIER"
+    DOTIDENTIFIER = "DOTIDENTIFIER"
     STRING = "STRING"
     NUMBER = "NUMBER"
 
@@ -38,7 +39,7 @@ class TokenType(str, Enum):
 
     NOT = "~"
     EOF = "EOF"
-
+    NULL = "Null"
 
 KEYWORDS: dict[str, TokenType] = {
     "var": TokenType.VAR,
@@ -51,6 +52,7 @@ KEYWORDS: dict[str, TokenType] = {
     "and": TokenType.AND,
     "or": TokenType.OR,
     "print": TokenType.PRINT,
+    "null": TokenType.NULL
 }
 
 SINGLE_CHAR_TOKENS: dict[str, TokenType] = {
