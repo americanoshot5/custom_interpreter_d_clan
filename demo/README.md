@@ -9,11 +9,15 @@
 현재 실행 위치 기준 상대 경로이기 때문입니다).
 
 ```bash
-python3 src/factory_shell.py demo/demo1_basics.cf
-python3 src/factory_shell.py demo/demo2_functions.cf
-python3 src/factory_shell.py demo/demo3_classes_and_modules.cf
+python3 src/factory_shell.py run demo/demo1_basics.cf
+python3 src/factory_shell.py run demo/demo2_functions.cf
+python3 src/factory_shell.py run demo/demo3_classes_and_modules.cf
 python3 demo/demo4_debugging.py
 ```
+
+`factory_shell.py`는 `run` / `debug` / `prompt` 세 서브커맨드를 제공합니다
+(하위 호환을 위해 서브커맨드 없이 `factory_shell.py <파일>`처럼 파일 경로만
+줘도 `run`과 동일하게 동작합니다).
 
 ## 데모 목록
 
@@ -22,30 +26,51 @@ python3 demo/demo4_debugging.py
 | `demo1_basics.cf` | 변수, 산술/비교 연산자, 조건문(`if`), 반복문(`for`), 블록 스코프, 배열 |
 | `demo2_functions.cf` | 함수 정의/호출, 재귀(팩토리얼·피보나치), 클로저 |
 | `demo3_classes_and_modules.cf` | 클래스, 상속(`Super`), `instanceof`, 모듈 `import` (같은 폴더의 `demo3_module_utils.cf`를 불러와 사용) |
-| `demo4_debugging.py` + `demo4_debug_target.cf` | 디버그 모드(`run_debug_mode`) — 브레이크포인트, 한 줄씩 실행(step), 변수 watch, 현재 스코프 inspect |
+| `demo4_debugging.py` + `demo4_debug_target.cf` | 디버그 모드(`run_debug_mode`) — 브레이크포인트, 한 줄씩 실행(step), 변수 watch, 현재 스코프 inspect (정해진 명령 시퀀스를 자동 재생) |
 
 `demo3_module_utils.cf`는 `demo3_classes_and_modules.cf`가 `import`로 불러오는
 보조 모듈 파일이라 직접 실행할 필요는 없습니다.
 
 `demo4_debugging.py`는 `factory_shell.run_debug_mode`를 직접 호출하는 파이썬
-드라이버 스크립트입니다. 디버그 모드는 사람이 콘솔에 한 줄씩 명령을 입력하는
-대화형 인터페이스라, 스크립트 안의 `COMMANDS` 리스트가 `break 6` → `watch total`
-→ `continue` → `step` → `step` → `inspect` → `continue` 순서로 실제 입력을
-대신 재현하고, 각 단계에서 `total` 값이 어떻게 바뀌는지 로그로 보여줍니다.
-`COMMANDS` 리스트의 값을 바꿔서 직접 다른 시나리오로 실험해봐도 됩니다.
+드라이버 스크립트로, 스크립트 안의 `COMMANDS` 리스트가 `break 6` → `watch total`
+→ `continue` → `step` → `step` → `inspect` → `continue` 순서로 미리 정해진
+명령을 자동 재생하며 각 단계에서 `total` 값이 어떻게 바뀌는지 로그로 보여줍니다.
+
+## 디버그 모드를 직접 콘솔에서 체험해보기
+
+미리 정해진 시퀀스가 아니라 직접 원하는 명령을 원하는 순서로 입력해보고
+싶다면, `debug` 서브커맨드로 대상 파일을 열면 됩니다:
+
+```bash
+python3 src/factory_shell.py debug demo/demo4_debug_target.cf
+```
+
+`(debug)` 프롬프트가 뜨면 아래 명령을 자유롭게 입력할 수 있습니다:
+
+- `break <줄번호>` / `remove <줄번호>` — 브레이크포인트 설정/해제
+- `watch <변수명>` / `unwatch <변수명>` — 변수 감시 설정/해제
+- `step` (또는 `next`) — 한 줄 실행
+- `continue` — 다음 브레이크포인트 또는 끝까지 실행
+- `breakpoints` / `watches` — 설정된 브레이크포인트/watch 목록 확인
+- `inspect` — 현재 스코프의 모든 변수 값 확인
+- `exit` — 종료
+
+다른 데모 파일(`demo1_basics.cf` 등)을 대상으로 실행해도 됩니다.
 
 ## 프롬프트 모드로 직접 입력해보기
 
 파일 없이 대화형으로 한 줄씩 입력해보고 싶다면:
 
 ```bash
-python3 src/prompt_shell.py
+python3 src/factory_shell.py prompt
 ```
+
+(또는 동일하게 동작하는 `python3 src/prompt_shell.py`)
 
 데모 `.cf` 파일 내용을 그대로 복사해서 프롬프트 모드에 붙여넣어도 정상
 동작합니다 (변수·함수·클래스 정의가 세션 동안 유지됩니다). 다만 파일에
 있는 빈 줄마다 그때까지 입력한 내용이 실행되므로, 각 구간의 출력이
 한 번에 몰아서 나오지 않고 조금씩 끊어서 출력됩니다. 전체 결과를 한
-번에 깔끔하게 보고 싶다면 `factory_shell.py` 파일 모드 실행을 사용하세요.
+번에 깔끔하게 보고 싶다면 `run` 서브커맨드(파일 모드)를 사용하세요.
 
 언어 문법 전체 설명은 저장소 루트의 `README.md`를 참고하세요.
