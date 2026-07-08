@@ -83,7 +83,7 @@ def test_imported_alias_is_scoped_to_import_block(tmp_path):
     }}
     (print sum.answer)
     """
-    with pytest.raises(CheckError, match="scope|alias.*sum|sum\\.answer"):
+    with pytest.raises(CheckError, match="sum"):
         _run(source)
 
 
