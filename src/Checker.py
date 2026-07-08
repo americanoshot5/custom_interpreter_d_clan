@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import ClassVar
 
 from common import (
+    ArrayExpr,
+    ArrayIndexExpr,
     BUILTIN_OPS,
     BlockStmt,
     CheckError,
@@ -188,6 +190,11 @@ class StaticChecker(Checker):
         elif isinstance(expr, ListExpr):
             for element in expr.elements:
                 self._check_expr(element, scopes)
+        elif isinstance(expr, ArrayExpr):
+            self._check_expr(expr.size, scopes)
+        elif isinstance(expr, ArrayIndexExpr):
+            self._check_expr(expr.array, scopes)
+            self._check_expr(expr.index, scopes)
         else:
             raise CheckError(f"Unknown expression type: {type(expr).__name__}")
 

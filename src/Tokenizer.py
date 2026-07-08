@@ -27,7 +27,7 @@ class SExpressionTokenizer(Tokenizer):
         return self.token
 
     def get_initial_token(self) -> list[Any]:
-        pattern = r'\s+|[(){}]|"[^"]*"|[^\s(){}]+'
+        pattern = r'\s+|[(){}\[\]]|"[^"]*"|[^\s(){}\[\]]+'
         tokens = re.findall(pattern, self.source)
         token = [token for token in tokens if not token.isspace()]
         return token
