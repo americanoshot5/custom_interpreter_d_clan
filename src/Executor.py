@@ -2,14 +2,11 @@ from __future__ import annotations
 
 import operator as _op
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
 from common import *
-
-from common import ArrayExpr, ArrayIndexExpr, BUILTIN_OPS, SetStmt, VarStmt
-
 from interfaces import *
-from dataclasses import dataclass
 
 # ── 연산자 테이블 ─────────────────────────────────────────────────────────────
 #
@@ -27,7 +24,7 @@ _BINARY: dict[str, Callable[[RuntimeValue, RuntimeValue], RuntimeValue]] = {
     "+":   _op.add,
     "-":   _op.sub,
     "*":   _op.mul,
-    "/":   _op.truediv,  # ZeroDivisionError은 자연스럽게 전파됩니다
+    "/":   _op.truediv,  # ZeroDivisionError 는 자연스럽게 전파됩니다
     "<":   _op.lt,
     ">":   _op.gt,
     "=":   _op.eq,
@@ -36,9 +33,7 @@ _BINARY: dict[str, Callable[[RuntimeValue, RuntimeValue], RuntimeValue]] = {
 }
 
 _ARRAY_OPS: frozenset[str] = frozenset({"Array", "index", "set-index!"})
-
-_ALL_OPS: frozenset[str] = frozenset(_UNARY) | frozenset(_BINARY) | _ARRAY_OPS
-
+_ALL_OPS: frozenset[str] = frozenset(_UNARY) | frozenset(_BINARY) | _ARRAY_OPS | {"instanceof", "return"}
 
 # ── 함수 런타임 값 / 반환 시그널 ──────────────────────────────────────────────
 
@@ -52,7 +47,39 @@ class Function:
 class _ReturnSignal(Exception):
     def __init__(self, value: "RuntimeValue") -> None:
         self.value = value
+# ── 런타임 객체 ───────────────────────────────────────────────────────────────
 
+@dataclass
+class ClassDef:
+    """실행 시간에 클래스를 나타내는 객체."""
+    name: str
+    parent: ClassDef | None
+    field_names: tuple[str, ...]
+    methods: dict[str, MethodDef]
+
+    def get_all_field_names(self) -> list[str]:
+        """상속 계층을 포함한 모든 필드 이름 (부모 → 자식 순서)."""
+        parent_fields = self.parent.get_all_field_names() if self.parent else []
+        own = [f for f in self.field_names if f not in parent_fields]
+        return parent_fields + own
+
+    def lookup_method(self, name: str) -> tuple[MethodDef, ClassDef] | None:
+        """메서드 이름으로 (메서드 정의, 정의된 클래스) 를 반환한다. 없으면 None."""
+        if name in self.methods:
+            return self.methods[name], self
+        if self.parent is not None:
+            return self.parent.lookup_method(name)
+        return None
+
+
+@dataclass
+class ClassInstance:
+    """클래스의 인스턴스."""
+    class_def: ClassDef
+    fields: dict[str, RuntimeValue] = field(default_factory=dict)
+
+    def __repr__(self) -> str:
+        return f"<{self.class_def.name} instance>"
 
 # ── 환경(스코프) ──────────────────────────────────────────────────────────────
 
@@ -98,6 +125,7 @@ class SExpressionExecutor(Executor):
         BlockStmt:      "_execute_blockstmt",
         FuncDefStmt:    "_execute_funcdefstmt",
         ReturnStmt:     "_execute_returnstmt",
+        ClassStmt:      "_execute_classstmt",
     }
 
     def __init__(self):
@@ -193,6 +221,23 @@ class SExpressionExecutor(Executor):
         finally:
             self._environment = previous
 
+    def _execute_classstmt(self, stmt: ClassStmt) -> RuntimeValue:
+        parent_def: ClassDef | None = None
+        if stmt.parent is not None:
+            parent_val = self._environment.lookup(stmt.parent)
+            if not isinstance(parent_val, ClassDef):
+                raise ExecuteError(f"'{stmt.parent}' is not a class")
+            parent_def = parent_val
+
+        class_def = ClassDef(
+            name=stmt.name,
+            parent=parent_def,
+            field_names=stmt.fields,
+            methods={m.name: m for m in stmt.methods},
+        )
+        self._environment.define(stmt.name, class_def)
+        return None
+
     # ── 식(Expr) 평가 ─────────────────────────────────────────────────────────
 
     def _execute_expr(self, expr: Expr) -> RuntimeValue:
@@ -206,6 +251,12 @@ class SExpressionExecutor(Executor):
             return self._execute_array_expr(expr)
         if isinstance(expr, ArrayIndexExpr):
             return self._execute_array_index_expr(expr)
+        if isinstance(expr, NewExpr):
+            return self._execute_new_expr(expr)
+        if isinstance(expr, DotExpr):
+            return self._execute_dot_expr(expr)
+        if isinstance(expr, SuperExpr):
+            return self._execute_super_expr(expr)
         raise ExecuteError(f"Unsupported expression: {type(expr).__name__}")
 
     def _execute_array_expr(self, expr: ArrayExpr) -> RuntimeValue:
@@ -239,7 +290,27 @@ class SExpressionExecutor(Executor):
             args = [self._execute_expr(arg) for arg in expr.elements[1:]]
             return self._call_function(op, args)
 
-        if not isinstance(op, str) or op not in _ALL_OPS:
+        # 클래스명을 생성자로 직접 호출: (ClassName args...)
+        if isinstance(op, ClassDef):
+            args = [self._execute_expr(a) for a in expr.elements[1:]]
+            return self._create_instance(op, args)
+
+        if not isinstance(op, str):
+            raise ExecuteError(f"'{op}' is not callable")
+
+        # return: 현재는 값을 그대로 반환 (함수 기능 구현 전 임시)
+        if op == "return":
+            return self._execute_expr(expr.elements[1]) if len(expr.elements) > 1 else None
+
+        # instanceof 특수 처리
+        if op == "instanceof":
+            if len(expr.elements) != 3:
+                raise ExecuteError("'instanceof' requires exactly 2 arguments")
+            obj_val = self._execute_expr(expr.elements[1])
+            class_val = self._execute_expr(expr.elements[2])
+            return self._do_instanceof(obj_val, class_val)
+
+        if op not in _ALL_OPS:
             raise ExecuteError(f"'{op}' is not a callable operator")
 
         if op in _ARRAY_OPS:
@@ -259,47 +330,177 @@ class SExpressionExecutor(Executor):
         except TypeError as e:
             raise ExecuteError(str(e)) from e
 
+    @staticmethod
+    def _as_array_size(value: RuntimeValue) -> int:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ExecuteError(f"Array size must be a number, got {type(value).__name__}")
+        size = int(value)
+        if size < 0:
+            raise ExecuteError(f"Array size must be non-negative, got {size}")
+        return size
+
+    @staticmethod
+    def _as_array_index(array: list, value: RuntimeValue) -> int:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ExecuteError(f"Array index must be a number, got {type(value).__name__}")
+        idx = int(value)
+        if idx < 0 or idx >= len(array):
+            raise ExecuteError(f"Array index {idx} out of bounds for array of size {len(array)}")
+        return idx
+
+    def _eval_array_arg(self, expr: ListExpr) -> list:
+        array = self._execute_expr(expr.elements[1])
+        if not isinstance(array, list):
+            raise ExecuteError("Cannot index non-array value")
+        return array
+
     def _execute_array_op(self, op: str, expr: ListExpr) -> RuntimeValue:
         if op == "Array":
             if len(expr.elements) != 2:
                 raise ExecuteError("Array takes exactly 1 argument (size)")
-            size = self._execute_expr(expr.elements[1])
-            if isinstance(size, bool) or not isinstance(size, (int, float)):
-                raise ExecuteError(f"Array size must be a number, got {type(size).__name__}")
-            size_int = int(size)
-            if size_int < 0:
-                raise ExecuteError(f"Array size must be non-negative, got {size_int}")
-            return [None] * size_int
+            size = self._as_array_size(self._execute_expr(expr.elements[1]))
+            return [None] * size
 
         if op == "index":
             if len(expr.elements) != 3:
                 raise ExecuteError("index takes exactly 2 arguments (array, index)")
-            array = self._execute_expr(expr.elements[1])
-            if not isinstance(array, list):
-                raise ExecuteError("Cannot index non-array value")
-            index = self._execute_expr(expr.elements[2])
-            if isinstance(index, bool) or not isinstance(index, (int, float)):
-                raise ExecuteError(f"Array index must be a number, got {type(index).__name__}")
-            idx = int(index)
-            if idx < 0 or idx >= len(array):
-                raise ExecuteError(f"Array index {idx} out of bounds for array of size {len(array)}")
+            array = self._eval_array_arg(expr)
+            idx = self._as_array_index(array, self._execute_expr(expr.elements[2]))
             return array[idx]
 
         # op == "set-index!"
         if len(expr.elements) != 4:
             raise ExecuteError("set-index! takes exactly 3 arguments (array, index, value)")
-        array = self._execute_expr(expr.elements[1])
-        if not isinstance(array, list):
-            raise ExecuteError("Cannot index non-array value")
-        index = self._execute_expr(expr.elements[2])
-        if isinstance(index, bool) or not isinstance(index, (int, float)):
-            raise ExecuteError(f"Array index must be a number, got {type(index).__name__}")
-        idx = int(index)
-        if idx < 0 or idx >= len(array):
-            raise ExecuteError(f"Array index {idx} out of bounds for array of size {len(array)}")
+        array = self._eval_array_arg(expr)
+        idx = self._as_array_index(array, self._execute_expr(expr.elements[2]))
         value = self._execute_expr(expr.elements[3])
         array[idx] = value
         return value
+
+    def _create_instance(self, class_def: ClassDef, args: list[RuntimeValue]) -> ClassInstance:
+        instance = ClassInstance(
+            class_def=class_def,
+            fields={name: None for name in class_def.get_all_field_names()},
+        )
+        init_result = class_def.lookup_method("init")
+        if init_result is not None:
+            init_def, defining_class = init_result
+            self._call_method(instance, init_def, defining_class, args)
+        elif args:
+            raise ExecuteError(
+                f"Class '{class_def.name}' has no 'init' method "
+                f"but {len(args)} argument(s) were provided"
+            )
+        return instance
+
+    def _do_instanceof(self, obj: RuntimeValue, cls: RuntimeValue) -> bool:
+        if not isinstance(cls, ClassDef):
+            raise ExecuteError("'instanceof' second argument must be a class")
+        if not isinstance(obj, ClassInstance):
+            return False
+        current = obj.class_def
+        while current is not None:
+            if current is cls or current.name == cls.name:
+                return True
+            current = current.parent
+        return False
+
+    # ── OOP 실행 ─────────────────────────────────────────────────────────────
+
+    def _execute_new_expr(self, expr: NewExpr) -> RuntimeValue:
+        class_val = self._environment.lookup(expr.class_name)
+        if not isinstance(class_val, ClassDef):
+            raise ExecuteError(f"'{expr.class_name}' is not a class")
+        args = [self._execute_expr(a) for a in expr.args]
+        return self._create_instance(class_val, args)
+
+    def _execute_dot_expr(self, expr: DotExpr) -> RuntimeValue:
+        obj = self._execute_expr(expr.obj)
+        if not isinstance(obj, ClassInstance):
+            raise ExecuteError(
+                f"'.' operator requires an instance object, got {type(obj).__name__!r}"
+            )
+
+        args = [self._execute_expr(a) for a in expr.args]
+        slot = expr.slot
+
+        # 메서드 우선 탐색
+        method_result = obj.class_def.lookup_method(slot)
+        if method_result is not None:
+            method_def, defining_class = method_result
+            return self._call_method(obj, method_def, defining_class, args)
+
+        # 필드 처리 — 구 문법은 pre-declared(obj.fields에 None으로 존재),
+        # 새 문법은 set-field! 로 동적 생성
+        if len(args) == 0:  # 읽기
+            if slot in obj.fields:
+                return obj.fields[slot]
+            raise ExecuteError(
+                f"'{obj.class_def.name}' has no field or method '{slot}'"
+            )
+        if len(args) == 1:  # 쓰기 (새 필드 동적 생성 포함)
+            obj.fields[slot] = args[0]
+            return args[0]
+        raise ExecuteError(
+            f"Field '{slot}' expects 0 (read) or 1 (write) argument(s), got {len(args)}"
+        )
+
+    def _execute_super_expr(self, expr: SuperExpr) -> RuntimeValue:
+        # self 와 __class__ 는 메서드 실행 환경에 정의되어 있다
+        try:
+            instance = self._environment.lookup("self")
+            current_class = self._environment.lookup("__class__")
+        except ExecuteError:
+            raise ExecuteError("'super' used outside of a method")
+
+        if not isinstance(instance, ClassInstance):
+            raise ExecuteError("'super' used outside of a method")
+
+        parent = current_class.parent
+        if parent is None:
+            raise ExecuteError(f"Class '{current_class.name}' has no parent class")
+
+        method_result = parent.lookup_method(expr.method)
+        if method_result is None:
+            raise ExecuteError(
+                f"Method '{expr.method}' not found in parent class '{parent.name}'"
+            )
+
+        method_def, defining_class = method_result
+        args = [self._execute_expr(a) for a in expr.args]
+        return self._call_method(instance, method_def, defining_class, args)
+
+    def _call_method(
+        self,
+        instance: ClassInstance,
+        method_def: MethodDef,
+        defining_class: ClassDef,
+        args: list[RuntimeValue],
+    ) -> RuntimeValue:
+        if len(args) != len(method_def.params):
+            raise ExecuteError(
+                f"Method '{method_def.name}' expects {len(method_def.params)} "
+                f"argument(s), got {len(args)}"
+            )
+
+        previous = self._environment
+        self._environment = Environment(parent=previous)
+        # self, __class__ (super 탐색용), 파라미터를 바인딩
+        self._environment.define("self", instance)
+        self._environment.define("This", instance)   # 새 문법 alias
+        self._environment.define("__class__", defining_class)
+        for param, val in zip(method_def.params, args):
+            self._environment.define(param, val)
+
+        try:
+            result: RuntimeValue = None
+            for stmt in method_def.body:
+                result = self._execute_stmt(stmt)
+            return result
+        except _ReturnSignal as sig:
+            return sig.value
+        finally:
+            self._environment = previous
 
 
 DefaultExecutor = SExpressionExecutor
