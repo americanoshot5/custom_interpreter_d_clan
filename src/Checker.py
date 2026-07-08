@@ -147,11 +147,15 @@ class StaticChecker(Checker):
         ImportStmt:     "_check_import_stmt",
     }
 
+    def __init__(self, scopes: _ScopeStack | None = None) -> None:
+        """scopes 를 넘기면 여러 check() 호출에 걸쳐 스코프(선언된 변수)를
+        유지한다 (예: REPL 세션에서 이전 입력의 변수를 다음 입력에서도 참조)."""
+        self._scopes = scopes if scopes is not None else _ScopeStack()
+
     def check(self, program: Program) -> None:
-        scopes = _ScopeStack()
         self._method_stack: list[dict] = []  # [{class_name, has_parent, is_init}]
         self._import_stack: list[str] = []  # 순환 임포트 감지용 (절대경로 스택)
-        self._check_program(program, scopes)
+        self._check_program(program, self._scopes)
 
     def _check_program(self, program: Program, scopes: _ScopeStack) -> None:
         for stmt in program.statements:

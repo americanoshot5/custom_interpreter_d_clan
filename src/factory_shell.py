@@ -7,7 +7,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from Assembler import assemble
-from Checker import check
+from Checker import StaticChecker, check
 from common import ExecuteError, LanguageError, Program, RuntimeValue, Stmt
 from Executor import SExpressionExecutor
 from Tokenizer import tokenize
@@ -264,12 +264,103 @@ def run_debug_mode(
     return DebugSession(program, write_output).run(commands)
 
 
+def run_interactive_debug_mode(
+    path: str,
+    read_line: Callable[[str], str] = input,
+    write_output: Callable[[str], None] = print,
+) -> int:
+    source_path = Path(path)
+    try:
+        source = source_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        write_output(f"File not found: {source_path}")
+        return 1
+    except OSError as error:
+        write_output(f"Could not read file '{source_path}': {error}")
+        return 1
+
+    try:
+        program = _run_pipeline(source)
+    except LanguageError as error:
+        write_output(f"Error: {error}")
+        return 1
+
+    session = DebugSession(program, write_output)
+    while True:
+        try:
+            command = read_line("(debug) ").strip()
+        except EOFError:
+            return 0
+        if command in {"exit", "quit"}:
+            return 0
+        if not command:
+            continue
+        exit_code = session.run([command])
+        if exit_code != 0:
+            return exit_code
+
+
+def run_prompt_mode(
+    read_line: Callable[[], str],
+    write_output: Callable[[str], None] = print,
+) -> int:
+    checker = StaticChecker()
+    executor = SExpressionExecutor()
+    buffer: list[str] = []
+
+    while True:
+        try:
+            line = read_line()
+        except EOFError:
+            return 0
+
+        if not buffer:
+            stripped = line.strip()
+            if stripped.lower() in {"exit", "quit"}:
+                return 0
+            if stripped == "":
+                continue
+
+        if line.strip() == "":
+            text = "\n".join(buffer)
+            try:
+                tokens = tokenize(text)
+                program = assemble(tokens)
+                checker.check(program)
+                result = executor.execute(program)
+            except LanguageError as error:
+                write_output(f"Error: {error}")
+            else:
+                if result is not None:
+                    write_output(str(result))
+            buffer = []
+            continue
+
+        buffer.append(line)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    if len(args) != 1:
-        print("Usage: factory_shell.py <source-file>")
+    usage = "Usage: factory_shell.py <run|debug|prompt> [source-file]"
+
+    if not args:
+        print(usage)
         return 2
-    return run_file_mode(args[0])
+
+    mode, *rest = args
+
+    if mode == "run" and len(rest) == 1:
+        return run_file_mode(rest[0])
+    if mode == "debug" and len(rest) == 1:
+        return run_interactive_debug_mode(rest[0])
+    if mode == "prompt" and not rest:
+        return run_prompt_mode(read_line=lambda: input(">>> "), write_output=print)
+    if mode not in {"run", "debug", "prompt"} and not rest:
+        # 하위 호환: 서브커맨드 없이 파일 경로 하나만 주면 run 모드로 처리한다.
+        return run_file_mode(mode)
+
+    print(usage)
+    return 2
 
 
 if __name__ == "__main__":

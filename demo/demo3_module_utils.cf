@@ -1,0 +1,5 @@
+(func square (n)
+  (return (* n n)))
+
+(func cube (n)
+  (return (* n (* n n))))

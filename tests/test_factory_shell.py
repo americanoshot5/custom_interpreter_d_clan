@@ -387,3 +387,79 @@ def test_debug_inspect_prints_scope_variables_in_name_order():
 
     assert exit_code == 0
     assert outputs.index("alpha = 2.0") < outputs.index("zeta = 1.0")
+
+
+def test_run_prompt_mode_preserves_session_state_across_submissions():
+    outputs: list[str] = []
+
+    exit_code = factory_shell.run_prompt_mode(
+        read_line=iter(
+            ["(var total 1)", "", "(set! total (+ total 2))", "", "(print total)", "", "exit"]
+        ).__next__,
+        write_output=outputs.append,
+    )
+
+    assert exit_code == 0
+    assert outputs[-1] == "3.0"
+
+
+def test_run_prompt_mode_reports_language_errors():
+    outputs: list[str] = []
+
+    exit_code = factory_shell.run_prompt_mode(
+        read_line=iter(["(print unknown)", "", "exit"]).__next__,
+        write_output=outputs.append,
+    )
+
+    assert exit_code == 0
+    assert any("Error:" in line for line in outputs)
+
+
+def test_main_run_subcommand_dispatches_to_file_mode(mocker):
+    fake_run_file_mode = mocker.patch.object(factory_shell, "run_file_mode", return_value=0)
+
+    exit_code = factory_shell.main(["run", "program.cf"])
+
+    assert exit_code == 0
+    fake_run_file_mode.assert_called_once_with("program.cf")
+
+
+def test_main_debug_subcommand_dispatches_to_interactive_debug_mode(mocker):
+    fake_run_debug = mocker.patch.object(
+        factory_shell, "run_interactive_debug_mode", return_value=0
+    )
+
+    exit_code = factory_shell.main(["debug", "program.cf"])
+
+    assert exit_code == 0
+    fake_run_debug.assert_called_once_with("program.cf")
+
+
+def test_main_prompt_subcommand_dispatches_to_prompt_mode(mocker):
+    fake_run_prompt = mocker.patch.object(factory_shell, "run_prompt_mode", return_value=0)
+
+    exit_code = factory_shell.main(["prompt"])
+
+    assert exit_code == 0
+    fake_run_prompt.assert_called_once()
+
+
+def test_main_bare_path_falls_back_to_file_mode_for_backward_compat(mocker):
+    fake_run_file_mode = mocker.patch.object(factory_shell, "run_file_mode", return_value=0)
+
+    exit_code = factory_shell.main(["program.cf"])
+
+    assert exit_code == 0
+    fake_run_file_mode.assert_called_once_with("program.cf")
+
+
+def test_main_with_no_args_prints_usage_and_returns_error():
+    exit_code = factory_shell.main([])
+
+    assert exit_code == 2
+
+
+def test_main_with_unknown_subcommand_and_extra_args_prints_usage():
+    exit_code = factory_shell.main(["bogus", "extra", "args"])
+
+    assert exit_code == 2

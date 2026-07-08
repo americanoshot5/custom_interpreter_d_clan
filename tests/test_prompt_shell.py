@@ -154,11 +154,33 @@ def test_multiple_top_level_expressions_submit_together_on_blank_line(mocker):
     fake_tokenize.assert_called_once_with('(print "hello")\n(+ 1 2)')
 
 
+def test_session_state_persists_across_separate_submissions():
+    from Assembler import assemble
+    from Checker import StaticChecker
+    from Executor import SExpressionExecutor
+    from Tokenizer import tokenize
+
+    outputs = []
+    checker = StaticChecker()
+    executor = SExpressionExecutor()
+    run_shell(
+        read_line=_scripted_read_line(["(var x 10)", "", "(+ x 5)", "", "exit"]),
+        write_output=outputs.append,
+        tokenize=tokenize,
+        assemble=assemble,
+        check=checker.check,
+        execute=executor.execute,
+        prompt=">>> ",
+        continuation_prompt="... ",
+    )
+    assert outputs == ["x", "15.0"]
+
+
 def test_main_wires_run_shell_with_real_pipeline_functions(mocker):
     import prompt_shell
     from Assembler import assemble
-    from Checker import check
-    from Executor import execute
+    from Checker import StaticChecker
+    from Executor import SExpressionExecutor
     from Tokenizer import tokenize
 
     fake_run_shell = mocker.patch.object(prompt_shell, "run_shell")
@@ -169,5 +191,7 @@ def test_main_wires_run_shell_with_real_pipeline_functions(mocker):
     assert captured["write_output"] is print
     assert captured["tokenize"] is tokenize
     assert captured["assemble"] is assemble
-    assert captured["check"] is check
-    assert captured["execute"] is execute
+    assert captured["check"].__self__.__class__ is StaticChecker
+    assert captured["check"].__func__ is StaticChecker.check
+    assert captured["execute"].__self__.__class__ is SExpressionExecutor
+    assert captured["execute"].__func__ is SExpressionExecutor.execute

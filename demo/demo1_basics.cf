@@ -1,0 +1,44 @@
+(print "=== Demo 1: 기초 문법 ===")
+(print "")
+
+(var score 82)
+(print "점수:")
+(print score)
+
+(if (> score 90)
+  (print "학점: A")
+  (if (> score 80)
+    (print "학점: B")
+    (print "학점: C")))
+
+(print "")
+(print "1부터 5까지 합계:")
+(var total 0)
+(for i 1 6
+  (set! total (+ total i)))
+(print total)
+
+(print "")
+(print "블록 스코프 확인 (바깥 x는 영향받지 않음):")
+(var x 100)
+{
+  (var x 999)
+  (print "블록 안쪽 x:")
+  (print x)
+}
+(print "블록 바깥 x:")
+(print x)
+
+(print "")
+(print "배열: 점수 5개의 평균")
+(var scores [5])
+(set-index! scores 0 90)
+(set-index! scores 1 85)
+(set-index! scores 2 78)
+(set-index! scores 3 92)
+(set-index! scores 4 88)
+
+(var sum 0)
+(for i 0 5
+  (set! sum (+ sum scores[i])))
+(print (/ sum 5))

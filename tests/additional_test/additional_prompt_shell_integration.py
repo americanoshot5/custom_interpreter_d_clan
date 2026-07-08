@@ -55,7 +55,7 @@ def test_factory_shell_file_mode_reports_runtime_error_line_and_stops(tmp_path):
     source_file.write_text(
         """
         (print 1)
-        (print notDefined)
+        (print (/ 1 0))
         (print 3)
         """,
         encoding="utf-8",
