@@ -27,6 +27,7 @@ from common import (
     FuncDefStmt,
     IdentifierExpr,
     IfStmt,
+    ImportStmt,
     ListExpr,
     LiteralExpr,
     PrintStmt,
@@ -89,6 +90,8 @@ def for_stmt(
     )
 
 
+def import_stmt(path_expr, alias: str, line: int = 1, col: int = 1) -> ImportStmt:
+    return ImportStmt(path=path_expr, alias=alias, location=loc(line, col))
 def func_def(name: str, params: tuple, body, line: int = 1, col: int = 1) -> FuncDefStmt:
     return FuncDefStmt(name=name, params=params, body=body, location=loc(line, col))
 
@@ -557,6 +560,73 @@ class TestCheckFunction:
             check(prog(var("x", list_expr(ident("+"), ident("x"), lit(1.0)))))
 
 
+# ── 10. import 문 ────────────────────────────────────────────────────────────
+
+class TestImportStmt:
+    def test_path_must_be_string_literal(self):
+        program = prog(import_stmt(ident("sum"), alias="sum"))
+        with pytest.raises(CheckError, match="string"):
+            check(program)
+
+    def test_missing_file_raises(self, tmp_path):
+        missing = tmp_path / "missing.cf"
+        program = prog(import_stmt(lit(str(missing)), alias="m"))
+        with pytest.raises(CheckError, match="not found"):
+            check(program)
+
+    def test_valid_import_declares_alias_in_scope(self, tmp_path):
+        lib = tmp_path / "lib.cf"
+        lib.write_text("(var answer 1)", encoding="utf-8")
+        program = prog(
+            import_stmt(lit(str(lib)), alias="m"),
+            print_stmt(ident("m")),
+        )
+        check(program)  # 예외 없이 통과해야 한다
+
+    def test_duplicate_import_same_scope_raises(self, tmp_path):
+        lib = tmp_path / "lib.cf"
+        lib.write_text("(var answer 1)", encoding="utf-8")
+        program = prog(
+            import_stmt(lit(str(lib)), alias="a"),
+            import_stmt(lit(str(lib)), alias="b"),
+        )
+        with pytest.raises(CheckError, match="already imported|duplicate"):
+            check(program)
+
+    def test_alias_collision_with_existing_variable_raises(self, tmp_path):
+        lib = tmp_path / "lib.cf"
+        lib.write_text("(var answer 1)", encoding="utf-8")
+        program = prog(
+            var("sum", init=lit(0.0)),
+            import_stmt(lit(str(lib)), alias="sum"),
+        )
+        with pytest.raises(CheckError, match="already declared"):
+            check(program)
+
+    def test_import_cycle_raises(self, tmp_path):
+        a = tmp_path / "a.cf"
+        b = tmp_path / "b.cf"
+        a.write_text(f'(import "{b}" alias b)', encoding="utf-8")
+        b.write_text(f'(import "{a}" alias a)', encoding="utf-8")
+        program = prog(import_stmt(lit(str(a)), alias="a"))
+        with pytest.raises(CheckError, match="circular|cycle|순환"):
+            check(program)
+
+    def test_import_inside_for_loop_raises(self, tmp_path):
+        lib = tmp_path / "lib.cf"
+        lib.write_text("(var answer 1)", encoding="utf-8")
+        program = prog(
+            for_stmt("i", lit(0.0), lit(1.0), import_stmt(lit(str(lib)), alias="m")),
+        )
+        with pytest.raises(CheckError, match="for|loop"):
+            check(program)
+
+    def test_imported_file_own_errors_propagate_as_check_error(self, tmp_path):
+        lib = tmp_path / "broken.cf"
+        lib.write_text("(print notDefined)", encoding="utf-8")
+        program = prog(import_stmt(lit(str(lib)), alias="m"))
+        with pytest.raises(CheckError, match="notDefined"):
+            check(program)
 # ── 10. FuncDefStmt / ReturnStmt 검사 ────────────────────────────────────────
 
 class TestFuncDefStmt:

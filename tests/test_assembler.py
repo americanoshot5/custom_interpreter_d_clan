@@ -15,6 +15,7 @@ import pytest
 from common import (
     AssembleError,
     BlockStmt,
+    DotExpr,
     ExpressionStmt,
     ForStmt,
     FuncDefStmt,
@@ -22,6 +23,7 @@ from common import (
     IfStmt,
     ListExpr,
     LiteralExpr,
+    NewExpr,
     PrintStmt,
     Program,
     ReturnStmt,
@@ -97,6 +99,30 @@ def test_assemble_nested_list_expression():
     assert isinstance(inner_head, IdentifierExpr) and inner_head.name == "*"
     assert inner_a.value == 2.0
     assert inner_b.value == 3.0
+
+
+def test_assemble_new_expr():
+    """(new Foo 1 2) 는 NewExpr(class_name='Foo', args=(1.0, 2.0)) 로 파싱되어야 한다.
+
+    회귀 테스트: NewExpr 에 @dataclass(frozen=True, slots=True) 데코레이터가
+    빠져 있으면 Expr 의 kw_only __init__ 을 상속받아 class_name/args 키워드
+    인자를 받아들이지 못하고 TypeError 가 발생한다.
+    """
+    tokens = [
+        lparen(),
+        tok(TokenType.NEW, "new"),
+        ident("Foo"),
+        num(1.0),
+        num(2.0),
+        rparen(),
+        eof(),
+    ]
+    expr = unwrap(tokens)
+    assert isinstance(expr, NewExpr)
+    assert expr.class_name == "Foo"
+    assert len(expr.args) == 2
+    assert expr.args[0].value == 1.0
+    assert expr.args[1].value == 2.0
 
 
 def test_assemble_missing_closing_paren_raises():
@@ -301,6 +327,20 @@ def test_operator_plus_becomes_identifier():
     expr = unwrap([tok(TokenType.PLUS, "+"), eof()])
     assert isinstance(expr, IdentifierExpr)
     assert expr.name == "+"
+
+
+def test_dotidentifier_atom_becomes_dot_expr():
+    """호출 위치가 아닌 곳의 obj.slot 도 DotExpr 로 분해되어야 한다."""
+    from common import DotExpr
+
+    expr = unwrap(
+        [tok(TokenType.DOTIDENTIFIER, "sum.answer", literal="sum.answer"), eof()]
+    )
+    assert isinstance(expr, DotExpr)
+    assert isinstance(expr.obj, IdentifierExpr)
+    assert expr.obj.name == "sum"
+    assert expr.slot == "answer"
+    assert expr.args == ()
 
 
 # ============================================================
@@ -1110,6 +1150,37 @@ def test_unclosed_block_raises():
         SExpressionAssembler(tokens).assemble()
 
 
+def test_import_stmt_parses_path_and_alias():
+    from common import ImportStmt
+
+    tokens = [
+        lparen(),
+        tok(TokenType.IMPORT, "import"),
+        string("lib.cf"),
+        ident("alias"),
+        ident("sum"),
+        rparen(),
+        eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, ImportStmt)
+    assert isinstance(stmt.path, LiteralExpr)
+    assert stmt.path.value == "lib.cf"
+    assert stmt.alias == "sum"
+
+
+def test_import_stmt_missing_alias_keyword_raises():
+    tokens = [
+        lparen(),
+        tok(TokenType.IMPORT, "import"),
+        string("lib.cf"),
+        ident("sum"),  # 'alias' 키워드 없이 바로 이름
+        rparen(),
+        eof(),
+    ]
+    with pytest.raises(AssembleError):
+        SExpressionAssembler(tokens).assemble()
 # ============================================================
 # 24. FuncDefStmt
 # ============================================================

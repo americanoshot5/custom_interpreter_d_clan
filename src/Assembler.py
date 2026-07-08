@@ -16,6 +16,7 @@ from common import (
     FuncDefStmt,
     IdentifierExpr,
     IfStmt,
+    ImportStmt,
     ListExpr,
     LiteralExpr,
     MethodDef,
@@ -46,6 +47,7 @@ class SExpressionAssembler(Assembler):
         TokenType.FUNC:   "_parse_func_stmt",
         TokenType.RETURN: "_parse_return_stmt",
         TokenType.CLASS: "_parse_class_stmt",
+        TokenType.IMPORT: "_parse_import_stmt",
     }
 
     # 새로운 expression special form 추가 시: 이 테이블에 한 줄 + 파서 메서드 하나만 추가하면 됩니다.
@@ -155,6 +157,25 @@ class SExpressionAssembler(Assembler):
             start=start,
             end=end,
             body=body,
+            location=open_paren.location,
+        )
+
+    def _parse_import_stmt(self, open_paren: Token) -> ImportStmt:
+        self._advance()  # consume 'import'
+        path_expr = self._expression()
+        alias_kw = self._advance()
+        if alias_kw.lexeme != "alias":
+            raise AssembleError(
+                f"Expected 'alias' after import path at "
+                f"{alias_kw.location.line}:{alias_kw.location.column}"
+            )
+        alias_name_token = self._consume(
+            TokenType.IDENTIFIER, "Expected alias name after 'alias'"
+        )
+        self._consume(TokenType.RIGHT_PAREN, "Expected ')' to close import statement")
+        return ImportStmt(
+            path=path_expr,
+            alias=alias_name_token.lexeme,
             location=open_paren.location,
         )
 
@@ -331,9 +352,7 @@ class SExpressionAssembler(Assembler):
         """(obj.method args...) or (Super.method args...) from DOTIDENTIFIER token"""
         tok = self._advance()  # consume DOTIDENTIFIER
         lexeme = tok.lexeme
-        dot_pos = lexeme.index(".")
-        obj_name = lexeme[:dot_pos]
-        method_name = lexeme[dot_pos + 1:]
+        obj_name, method_name = self._split_dot_identifier(lexeme)
 
         args: list[Expr] = []
         while not self._check(TokenType.RIGHT_PAREN):
@@ -484,7 +503,20 @@ class SExpressionAssembler(Assembler):
             raise AssembleError(f"Unexpected ']' at {token.location.line}:{token.location.column}")
         if token.type in {TokenType.NUMBER, TokenType.STRING, TokenType.TRUE, TokenType.FALSE}:
             return LiteralExpr(token.literal, location=token.location)
+        if token.type is TokenType.DOTIDENTIFIER:
+            obj_name, slot_name = self._split_dot_identifier(token.lexeme)
+            return DotExpr(
+                obj=IdentifierExpr(obj_name, location=token.location),
+                slot=slot_name,
+                args=(),
+                location=token.location,
+            )
         return IdentifierExpr(token.lexeme, location=token.location)
+
+    @staticmethod
+    def _split_dot_identifier(lexeme: str) -> tuple[str, str]:
+        dot_pos = lexeme.index(".")
+        return lexeme[:dot_pos], lexeme[dot_pos + 1:]
 
     def _assert_expr(self, node: Expr) -> None:
         if isinstance(node, Stmt):
