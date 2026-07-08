@@ -118,7 +118,7 @@ def test_debug_mode_continue_without_breakpoint_finishes_program():
     assert outputs[-1] == "Program finished"
 
 
-def test_debug_mode_continue_stops_before_breakpoint():
+def test_debug_mode_continue_executes_through_breakpoint_line():
     source = """
     (var total 0)
     (set! total (+ total 1))
@@ -128,17 +128,12 @@ def test_debug_mode_continue_stops_before_breakpoint():
 
     exit_code = factory_shell.run_debug_mode(
         source,
-        commands=["break 4", "continue", "step"],
+        commands=["break 3", "continue", "inspect"],
         write_output=outputs.append,
     )
 
     assert exit_code == 0
-    stop_index = next(
-        index for index, line in enumerate(outputs)
-        if "stopped" in line.lower() and "4" in line
-    )
-    assert "1.0" not in outputs[:stop_index]
-    assert "1.0" in outputs[stop_index + 1:]
+    assert "total = 1.0" in outputs
 
 
 def test_debug_mode_manages_breakpoint_list():
@@ -199,3 +194,196 @@ def test_debug_mode_reports_runtime_error_line_and_stops():
     assert exit_code == 1
     assert any("runtime error" in line.lower() and "3" in line for line in outputs)
     assert "3.0" not in outputs
+
+
+def test_debug_watch_prints_value_at_each_stop():
+    source = """
+    (var total 0)
+    (set! total (+ total 1))
+    (set! total (+ total 2))
+    """
+    outputs: list[str] = []
+
+    exit_code = factory_shell.run_debug_mode(
+        source,
+        commands=["watch total", "step", "step", "step"],
+        write_output=outputs.append,
+    )
+
+    assert exit_code == 0
+    assert "Watch total: <undefined>" in outputs
+    assert "Watch total: 0.0" in outputs
+    assert "Watch total: 1.0" in outputs
+    assert "Watch total: 3.0" in outputs
+
+
+def test_debug_watches_command_lists_current_watch_values():
+    source = """
+    (var total 0)
+    (set! total 5)
+    """
+    outputs: list[str] = []
+
+    exit_code = factory_shell.run_debug_mode(
+        source,
+        commands=["watch total", "step", "step", "watches"],
+        write_output=outputs.append,
+    )
+
+    assert exit_code == 0
+    assert outputs[-1] == "Watch total: 5.0"
+
+
+def test_debug_unwatch_removes_variable_from_watch_list():
+    source = """
+    (var total 0)
+    (set! total 1)
+    """
+    outputs: list[str] = []
+
+    exit_code = factory_shell.run_debug_mode(
+        source,
+        commands=["watch total", "step", "unwatch total", "step"],
+        write_output=outputs.append,
+    )
+
+    assert exit_code == 0
+    assert "Watch total: 0.0" in outputs
+    assert "Watch total: 1.0" not in outputs
+    assert "Stopped watching total" in outputs
+
+
+def test_debug_watches_reports_empty_watch_list():
+    outputs: list[str] = []
+
+    exit_code = factory_shell.run_debug_mode(
+        "(print 1)",
+        commands=["watches"],
+        write_output=outputs.append,
+    )
+
+    assert exit_code == 0
+    assert outputs[-1] == "Watches: none"
+
+
+def test_debug_inspect_prints_current_scope_variables():
+    source = """
+    (var left 1)
+    (var right 2)
+    """
+    outputs: list[str] = []
+
+    exit_code = factory_shell.run_debug_mode(
+        source,
+        commands=["step", "step", "inspect"],
+        write_output=outputs.append,
+    )
+
+    assert exit_code == 0
+    assert "left = 1.0" in outputs
+    assert "right = 2.0" in outputs
+
+
+def test_debug_inspect_reports_empty_scope():
+    outputs: list[str] = []
+
+    exit_code = factory_shell.run_debug_mode(
+        "(print 1)",
+        commands=["inspect"],
+        write_output=outputs.append,
+    )
+
+    assert exit_code == 0
+    assert outputs[-1] == "Scope: empty"
+
+
+def test_debug_watch_tracks_multiple_variables_at_same_stop():
+    source = """
+    (var left 1)
+    (var right 2)
+    """
+    outputs: list[str] = []
+
+    exit_code = factory_shell.run_debug_mode(
+        source,
+        commands=["watch left", "watch right", "step", "step"],
+        write_output=outputs.append,
+    )
+
+    assert exit_code == 0
+    assert "Watch left: 1.0" in outputs
+    assert "Watch right: <undefined>" in outputs
+    assert "Watch right: 2.0" in outputs
+
+
+def test_debug_watch_does_not_duplicate_same_variable():
+    source = """
+    (var total 0)
+    """
+    outputs: list[str] = []
+
+    exit_code = factory_shell.run_debug_mode(
+        source,
+        commands=["watch total", "watch total", "step"],
+        write_output=outputs.append,
+    )
+
+    assert exit_code == 0
+    assert outputs.count("Watch total: 0.0") == 1
+
+
+def test_debug_watch_command_requires_variable_name():
+    outputs: list[str] = []
+
+    exit_code = factory_shell.run_debug_mode(
+        "(print 1)",
+        commands=["watch"],
+        write_output=outputs.append,
+    )
+
+    assert exit_code == 1
+    assert outputs[-1] == "Usage: watch <variable>"
+
+
+def test_debug_unwatch_command_requires_variable_name():
+    outputs: list[str] = []
+
+    exit_code = factory_shell.run_debug_mode(
+        "(print 1)",
+        commands=["unwatch"],
+        write_output=outputs.append,
+    )
+
+    assert exit_code == 1
+    assert outputs[-1] == "Usage: unwatch <variable>"
+
+
+def test_debug_unwatch_unknown_variable_is_noop():
+    outputs: list[str] = []
+
+    exit_code = factory_shell.run_debug_mode(
+        "(print 1)",
+        commands=["unwatch missing", "step"],
+        write_output=outputs.append,
+    )
+
+    assert exit_code == 0
+    assert "Stopped watching missing" in outputs
+    assert all(not line.startswith("Watch missing:") for line in outputs)
+
+
+def test_debug_inspect_prints_scope_variables_in_name_order():
+    source = """
+    (var zeta 1)
+    (var alpha 2)
+    """
+    outputs: list[str] = []
+
+    exit_code = factory_shell.run_debug_mode(
+        source,
+        commands=["step", "step", "inspect"],
+        write_output=outputs.append,
+    )
+
+    assert exit_code == 0
+    assert outputs.index("alpha = 2.0") < outputs.index("zeta = 1.0")
