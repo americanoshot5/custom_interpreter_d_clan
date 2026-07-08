@@ -35,7 +35,7 @@ from common import (
     Stmt,
     VarStmt,
 )
-from Checker import BindingMap, ConstantFolder, SExpressionBinder, SExpressionChecker, check
+from Checker import BindingMap, ConstantFolder, StaticBinder, SExpressionChecker, check
 
 
 # ── AST 헬퍼 ─────────────────────────────────────────────────────────────────
@@ -548,7 +548,7 @@ class TestCheckFunction:
             check(prog(var("x", list_expr(ident("+"), ident("x"), lit(1.0)))))
 
 
-# ── 10. 정적 바인딩 (SExpressionBinder) ───────────────────────────────────────────
+# ── 10. 정적 바인딩 (StaticBinder) ───────────────────────────────────────────
 #
 # 검증 전략:
 #  - 바인딩 맵의 distance 값이 실제 스코프 깊이와 일치하는지 확인
@@ -556,13 +556,13 @@ class TestCheckFunction:
 #    (런타임이 아닌 컴파일 타임에 정확히 1회씩만 계산됨을 보장)
 #  - 계산된 distance를 사용해 Environment 체인에서 직접 접근 가능함을 실증
 
-class TestSExpressionBinder:
+class TestStaticBinder:
 
     def test_variable_in_same_scope_distance_zero(self):
         """현재 스코프에 선언된 변수를 같은 스코프에서 참조 → distance 0."""
         x_ref = IdentifierExpr("x")
         program = prog(var("x", lit(1.0)), expr_stmt(x_ref))
-        bindings = SExpressionBinder().bind(program)
+        bindings = StaticBinder().bind(program)
         assert bindings[id(x_ref)] == 0
 
     def test_variable_one_scope_up(self):
@@ -572,7 +572,7 @@ class TestSExpressionBinder:
             var("x", lit(10.0)),
             block(print_stmt(x_ref)),
         )
-        bindings = SExpressionBinder().bind(program)
+        bindings = StaticBinder().bind(program)
         assert bindings[id(x_ref)] == 1
 
     def test_variable_two_scopes_up(self):
@@ -582,7 +582,7 @@ class TestSExpressionBinder:
             var("x", lit(10.0)),
             block(block(print_stmt(x_ref))),
         )
-        bindings = SExpressionBinder().bind(program)
+        bindings = StaticBinder().bind(program)
         assert bindings[id(x_ref)] == 2
 
     def test_deeply_nested_three_scopes_up(self):
@@ -592,14 +592,14 @@ class TestSExpressionBinder:
             var("x", lit(1.0)),
             block(block(block(expr_stmt(x_ref)))),
         )
-        bindings = SExpressionBinder().bind(program)
+        bindings = StaticBinder().bind(program)
         assert bindings[id(x_ref)] == 3
 
     def test_for_iterator_distance_zero_in_body(self):
         """for 반복자는 for 전용 스코프(distance 0)에서 직접 접근."""
         i_ref = IdentifierExpr("i")
         program = prog(for_stmt("i", lit(0.0), lit(3.0), print_stmt(i_ref)))
-        bindings = SExpressionBinder().bind(program)
+        bindings = StaticBinder().bind(program)
         assert bindings[id(i_ref)] == 0
 
     def test_outer_variable_from_for_body_distance_one(self):
@@ -609,7 +609,7 @@ class TestSExpressionBinder:
             var("x", lit(5.0)),
             for_stmt("i", lit(0.0), lit(3.0), print_stmt(x_ref)),
         )
-        bindings = SExpressionBinder().bind(program)
+        bindings = StaticBinder().bind(program)
         assert bindings[id(x_ref)] == 1
 
     def test_two_different_references_get_own_entries(self):
@@ -621,7 +621,7 @@ class TestSExpressionBinder:
             print_stmt(x_ref1),
             print_stmt(x_ref2),
         )
-        bindings = SExpressionBinder().bind(program)
+        bindings = StaticBinder().bind(program)
         assert id(x_ref1) in bindings
         assert id(x_ref2) in bindings
         assert bindings[id(x_ref1)] == bindings[id(x_ref2)] == 0
@@ -633,14 +633,14 @@ class TestSExpressionBinder:
             var("x", lit(0.0)),
             block(set_node),  # x는 1단계 위 스코프
         )
-        bindings = SExpressionBinder().bind(program)
+        bindings = StaticBinder().bind(program)
         assert bindings[id(set_node)] == 1
 
     def test_builtin_op_distance_recorded(self):
         """내장 연산자(+)는 전역 스코프에 있으므로 최상위에서 distance 0."""
         plus_ref = IdentifierExpr("+")
         program = prog(expr_stmt(plus_ref))
-        bindings = SExpressionBinder().bind(program)
+        bindings = StaticBinder().bind(program)
         assert bindings[id(plus_ref)] == 0
 
     def test_spy_resolve_distance_called_once_per_identifier(self, mocker):
@@ -656,7 +656,7 @@ class TestSExpressionBinder:
             var("y", lit(2.0)),
             print_stmt(list_expr(plus_ref, x_ref, y_ref)),
         )
-        binder = SExpressionBinder()
+        binder = StaticBinder()
         spy = mocker.spy(binder, "_resolve_distance")
         binder.bind(program)
         # x, y, + 각 1회 → 총 3회 (런타임 반복 횟수와 무관)
@@ -674,7 +674,7 @@ class TestSExpressionBinder:
             var("x", lit(10.0)),
             block(block(print_stmt(x_ref))),  # x는 2단계 위
         )
-        bindings = SExpressionBinder().bind(program)
+        bindings = StaticBinder().bind(program)
         assert bindings[id(x_ref)] == 2
 
         # 동일한 스코프 구조를 Environment로 재현
@@ -691,12 +691,12 @@ class TestSExpressionBinder:
 
     def test_binding_map_is_dict(self):
         """bind() 반환값은 dict 타입이다."""
-        result = SExpressionBinder().bind(prog())
+        result = StaticBinder().bind(prog())
         assert isinstance(result, dict)
 
     def test_empty_program_returns_empty_map(self):
         """빈 프로그램 → 빈 바인딩 맵."""
-        bindings = SExpressionBinder().bind(prog())
+        bindings = StaticBinder().bind(prog())
         assert bindings == {}
 
 

@@ -312,7 +312,7 @@ def check(program: Program) -> None:
 BindingMap = dict[int, int]  # id(IdentifierExpr | SetStmt) → scope distance
 
 
-class SExpressionBinder:
+class StaticBinder:
     """
     검사된 AST를 순회하며 변수 참조·할당마다 스코프 거리를 미리 계산한다.
 
@@ -550,7 +550,7 @@ __all__ = [
     "BindingMap",
     "ConstantFolder",
     "DefaultChecker",
-    "SExpressionBinder",
+    "StaticBinder",
     "SExpressionChecker",
     "check",
 ]

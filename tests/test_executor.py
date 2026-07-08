@@ -263,7 +263,7 @@ class TestStaticBindingExecutor:
             VarStmt(name="x", initializer=LiteralExpr(42.0)),
             ExpressionStmt(x_ref),
         ))
-        bindings = SExpressionBinder().bind(program)
+        bindings = StaticBinder().bind(program)
         result = SExpressionExecutor(bindings=bindings).execute(program)
         assert result == 42.0
 
@@ -274,7 +274,7 @@ class TestStaticBindingExecutor:
             VarStmt(name="x", initializer=LiteralExpr(7.0)),
             BlockStmt((ExpressionStmt(x_ref),)),
         ))
-        bindings = SExpressionBinder().bind(program)
+        bindings = StaticBinder().bind(program)
         assert bindings[id(x_ref)] == 1  # x 는 1단계 위
         result = SExpressionExecutor(bindings=bindings).execute(program)
         assert result == 7.0
@@ -295,7 +295,7 @@ class TestStaticBindingExecutor:
             BlockStmt((set_node,)),
             ExpressionStmt(IdentifierExpr("x")),
         ))
-        bindings = SExpressionBinder().bind(program)
+        bindings = StaticBinder().bind(program)
         calc = SExpressionExecutor(bindings=bindings)
         calc.execute(program)
         assert calc._environment.lookup("x") == 99.0
@@ -311,7 +311,7 @@ class TestStaticBindingExecutor:
                 body=ExpressionStmt(i_ref),
             ),
         ))
-        bindings = SExpressionBinder().bind(program)
+        bindings = StaticBinder().bind(program)
         assert bindings[id(i_ref)] == 0  # i 는 for 스코프(distance=0)
         result = SExpressionExecutor(bindings=bindings).execute(program)
         assert result == 4  # 마지막 반복(i=4)의 ExpressionStmt 값
@@ -326,7 +326,7 @@ class TestStaticBindingExecutor:
             VarStmt(name="x", initializer=LiteralExpr(42.0)),
             ExpressionStmt(x_ref),
         ))
-        bindings = SExpressionBinder().bind(program)
+        bindings = StaticBinder().bind(program)
 
         executor = SExpressionExecutor(bindings=bindings)
         spy_lookup    = mocker.spy(Environment, "lookup")
@@ -364,7 +364,7 @@ class TestStaticBindingExecutor:
             VarStmt(name="x", initializer=LiteralExpr(10.0)),
             BlockStmt((ExpressionStmt(x_ref),)),
         ))
-        bindings = SExpressionBinder().bind(program)
+        bindings = StaticBinder().bind(program)
         assert bindings[id(x_ref)] == 1  # sanity check
 
         calls: list[tuple[int, str]] = []
@@ -390,7 +390,7 @@ class TestStaticBindingExecutor:
             VarStmt(name="x", initializer=LiteralExpr(0.0)),
             BlockStmt((set_node,)),
         ))
-        bindings = SExpressionBinder().bind(program)
+        bindings = StaticBinder().bind(program)
 
         executor = SExpressionExecutor(bindings=bindings)
         spy_assign    = mocker.spy(Environment, "assign")
@@ -445,7 +445,7 @@ class TestStaticBindingExecutor:
 
         # 바인딩 있는 경우: lookup_at 으로 직접 접근
         prog_with_bind = make_program(x_ref_with_bind)
-        bindings = SExpressionBinder().bind(prog_with_bind)
+        bindings = StaticBinder().bind(prog_with_bind)
         assert bindings[id(x_ref_with_bind)] == 3  # 3단계 위
 
         spy_lookup_at = mocker.spy(Environment, "lookup_at")
