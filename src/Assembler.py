@@ -16,6 +16,7 @@ from common import (
     FuncDefStmt,
     IdentifierExpr,
     IfStmt,
+    ImportStmt,
     ListExpr,
     LiteralExpr,
     MethodDef,
@@ -46,6 +47,7 @@ class SExpressionAssembler(Assembler):
         TokenType.FUNC:   "_parse_func_stmt",
         TokenType.RETURN: "_parse_return_stmt",
         TokenType.CLASS: "_parse_class_stmt",
+        TokenType.IMPORT: "_parse_import_stmt",
     }
 
     # 새로운 expression special form 추가 시: 이 테이블에 한 줄 + 파서 메서드 하나만 추가하면 됩니다.
@@ -155,6 +157,25 @@ class SExpressionAssembler(Assembler):
             start=start,
             end=end,
             body=body,
+            location=open_paren.location,
+        )
+
+    def _parse_import_stmt(self, open_paren: Token) -> ImportStmt:
+        self._advance()  # consume 'import'
+        path_expr = self._expression()
+        alias_kw = self._advance()
+        if alias_kw.lexeme != "alias":
+            raise AssembleError(
+                f"Expected 'alias' after import path at "
+                f"{alias_kw.location.line}:{alias_kw.location.column}"
+            )
+        alias_name_token = self._consume(
+            TokenType.IDENTIFIER, "Expected alias name after 'alias'"
+        )
+        self._consume(TokenType.RIGHT_PAREN, "Expected ')' to close import statement")
+        return ImportStmt(
+            path=path_expr,
+            alias=alias_name_token.lexeme,
             location=open_paren.location,
         )
 

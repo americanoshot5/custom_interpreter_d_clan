@@ -1146,3 +1146,36 @@ def test_unclosed_block_raises():
     tokens = [lbrace(), lparen(), kw(TokenType.PRINT), ident("x"), rparen(), eof()]
     with pytest.raises(AssembleError):
         SExpressionAssembler(tokens).assemble()
+
+
+def test_import_stmt_parses_path_and_alias():
+    from common import ImportStmt
+
+    tokens = [
+        lparen(),
+        tok(TokenType.IMPORT, "import"),
+        string("lib.cf"),
+        ident("alias"),
+        ident("sum"),
+        rparen(),
+        eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, ImportStmt)
+    assert isinstance(stmt.path, LiteralExpr)
+    assert stmt.path.value == "lib.cf"
+    assert stmt.alias == "sum"
+
+
+def test_import_stmt_missing_alias_keyword_raises():
+    tokens = [
+        lparen(),
+        tok(TokenType.IMPORT, "import"),
+        string("lib.cf"),
+        ident("sum"),  # 'alias' 키워드 없이 바로 이름
+        rparen(),
+        eof(),
+    ]
+    with pytest.raises(AssembleError):
+        SExpressionAssembler(tokens).assemble()
