@@ -204,8 +204,14 @@ class StaticChecker(Checker):
         scopes.pop()
 
     def _check_return_stmt(self, stmt: ReturnStmt, scopes: _ScopeStack) -> None:
-        if getattr(self, "_in_function", 0) == 0:
+        in_function = getattr(self, "_in_function", 0) > 0
+        in_method = bool(self._method_stack)
+        if not in_function and not in_method:
             raise CheckError("'return' is used outside function")
+        # init 메서드에서 값 반환 금지 (함수 안이 아닐 때만 — 함수 안에서는 허용)
+        if in_method and not in_function and stmt.value is not None:
+            if self._method_stack[-1]["is_init"]:
+                raise CheckError("'init' method cannot use 'return' with a value")
         if stmt.value is not None:
             self._check_expr(stmt.value, scopes)
 

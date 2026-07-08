@@ -290,7 +290,6 @@ class SExpressionExecutor(Executor):
             args = [self._execute_expr(arg) for arg in expr.elements[1:]]
             return self._call_function(op, args)
 
-        if not isinstance(op, str) or op not in _ALL_OPS:
         # 클래스명을 생성자로 직접 호출: (ClassName args...)
         if isinstance(op, ClassDef):
             args = [self._execute_expr(a) for a in expr.elements[1:]]
@@ -498,6 +497,8 @@ class SExpressionExecutor(Executor):
             for stmt in method_def.body:
                 result = self._execute_stmt(stmt)
             return result
+        except _ReturnSignal as sig:
+            return sig.value
         finally:
             self._environment = previous
 
