@@ -5,7 +5,7 @@ from collections.abc import Callable
 from typing import Any, ClassVar
 
 from common import *
-from common import BUILTIN_OPS, SetStmt, VarStmt
+from common import BUILTIN_OPS, FuncDefStmt, ReturnStmt, SetStmt, VarStmt
 from interfaces import *
 from dataclasses import dataclass
 
@@ -34,6 +34,20 @@ _BINARY: dict[str, Callable[[RuntimeValue, RuntimeValue], RuntimeValue]] = {
 }
 
 _ALL_OPS: frozenset[str] = frozenset(_UNARY) | frozenset(_BINARY)
+
+
+# ── 함수 런타임 값 / 반환 시그널 ──────────────────────────────────────────────
+
+@dataclass
+class Function:
+    params: tuple[str, ...]
+    body: "Stmt"
+    closure: "Environment"
+
+
+class _ReturnSignal(Exception):
+    def __init__(self, value: "RuntimeValue") -> None:
+        self.value = value
 
 
 # ── 환경(스코프) ──────────────────────────────────────────────────────────────
@@ -78,6 +92,8 @@ class SExpressionExecutor(Executor):
         IfStmt:         "_execute_ifstmt",
         ForStmt:        "_execute_forstmt",
         BlockStmt:      "_execute_blockstmt",
+        FuncDefStmt:    "_execute_funcdefstmt",
+        ReturnStmt:     "_execute_returnstmt",
     }
 
     def __init__(self):
@@ -146,6 +162,33 @@ class SExpressionExecutor(Executor):
         finally:
             self._environment = previous
 
+    def _execute_funcdefstmt(self, stmt: FuncDefStmt) -> RuntimeValue:
+        func = Function(params=stmt.params, body=stmt.body, closure=self._environment)
+        self._environment.define(stmt.name, func)
+        return stmt.name
+
+    def _execute_returnstmt(self, stmt: ReturnStmt) -> RuntimeValue:
+        value = self._execute_expr(stmt.value) if stmt.value is not None else None
+        raise _ReturnSignal(value)
+
+    def _call_function(self, func: Function, args: list) -> RuntimeValue:
+        if len(args) != len(func.params):
+            raise ExecuteError(
+                f"Function expects {len(func.params)} argument(s) but got {len(args)}"
+            )
+        call_env = Environment(parent=func.closure)
+        for param, arg in zip(func.params, args):
+            call_env.define(param, arg)
+        previous = self._environment
+        self._environment = call_env
+        try:
+            self._execute_stmt(func.body)
+            return None
+        except _ReturnSignal as sig:
+            return sig.value
+        finally:
+            self._environment = previous
+
     # ── 식(Expr) 평가 ─────────────────────────────────────────────────────────
 
     def _execute_expr(self, expr: Expr) -> RuntimeValue:
@@ -162,6 +205,11 @@ class SExpressionExecutor(Executor):
             raise ExecuteError("Empty s-expression")
 
         op = self._execute_expr(expr.elements[0])
+
+        if isinstance(op, Function):
+            args = [self._execute_expr(arg) for arg in expr.elements[1:]]
+            return self._call_function(op, args)
+
         if not isinstance(op, str) or op not in _ALL_OPS:
             raise ExecuteError(f"'{op}' is not a callable operator")
 
