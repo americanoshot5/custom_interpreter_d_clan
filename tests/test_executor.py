@@ -201,3 +201,46 @@ def test_execute_import_isolates_module_namespace(tmp_path):
     ))
     with pytest.raises(ExecuteError):
         execute(program)
+
+
+def test_execute_dot_expr_calls_function_member_of_module(tmp_path):
+    lib = tmp_path / "lib.cf"
+    lib.write_text(
+        "(func add (a b) { (return (+ a b)) })",
+        encoding="utf-8",
+    )
+    program = Program((
+        ImportStmt(path=LiteralExpr(str(lib)), alias="m"),
+        ExpressionStmt(
+            DotExpr(
+                obj=IdentifierExpr("m"),
+                slot="add",
+                args=(LiteralExpr(1.0), LiteralExpr(2.0)),
+            )
+        ),
+    ))
+    assert execute(program) == 3.0
+
+
+def test_execute_dot_expr_missing_module_member_raises(tmp_path):
+    lib = tmp_path / "lib.cf"
+    lib.write_text("(var answer 42)", encoding="utf-8")
+    program = Program((
+        ImportStmt(path=LiteralExpr(str(lib)), alias="m"),
+        ExpressionStmt(DotExpr(obj=IdentifierExpr("m"), slot="missing", args=())),
+    ))
+    with pytest.raises(ExecuteError):
+        execute(program)
+
+
+def test_execute_dot_expr_calling_non_function_member_raises(tmp_path):
+    lib = tmp_path / "lib.cf"
+    lib.write_text("(var answer 42)", encoding="utf-8")
+    program = Program((
+        ImportStmt(path=LiteralExpr(str(lib)), alias="m"),
+        ExpressionStmt(
+            DotExpr(obj=IdentifierExpr("m"), slot="answer", args=(LiteralExpr(1.0),))
+        ),
+    ))
+    with pytest.raises(ExecuteError):
+        execute(program)

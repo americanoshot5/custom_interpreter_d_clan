@@ -441,6 +441,18 @@ class SExpressionExecutor(Executor):
 
     def _execute_dot_expr(self, expr: DotExpr) -> RuntimeValue:
         obj = self._execute_expr(expr.obj)
+
+        if isinstance(obj, Module):
+            value = obj.environment.lookup(expr.slot)
+            args = [self._execute_expr(a) for a in expr.args]
+            if not args:
+                return value
+            if not isinstance(value, Function):
+                raise ExecuteError(
+                    f"'{expr.slot}' is not callable in module '{obj.name}'"
+                )
+            return self._call_function(value, args)
+
         if not isinstance(obj, ClassInstance):
             raise ExecuteError(
                 f"'.' operator requires an instance object, got {type(obj).__name__!r}"
