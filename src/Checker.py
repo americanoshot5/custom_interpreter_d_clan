@@ -11,12 +11,14 @@ from common import (
     Expr,
     ExpressionStmt,
     ForStmt,
+    FuncDefStmt,
     IdentifierExpr,
     IfStmt,
     ListExpr,
     LiteralExpr,
     PrintStmt,
     Program,
+    ReturnStmt,
     SetStmt,
     SourceLocation,
     Stmt,
@@ -121,6 +123,8 @@ class StaticChecker(Checker):
         BlockStmt:      "_check_block_stmt",
         IfStmt:         "_check_if_stmt",
         ForStmt:        "_check_for_stmt",
+        FuncDefStmt:    "_check_func_stmt",
+        ReturnStmt:     "_check_return_stmt",
     }
 
     def check(self, program: Program) -> None:
@@ -179,6 +183,24 @@ class StaticChecker(Checker):
         scopes.declare(stmt.iterator, stmt.location)
         self._check_stmt(stmt.body, scopes)
         scopes.pop()
+
+    def _check_func_stmt(self, stmt: FuncDefStmt, scopes: _ScopeStack) -> None:
+        # 재귀 호출을 허용하기 위해 함수 이름을 외부 스코프에 먼저 등록한다.
+        scopes.declare(stmt.name, stmt.location)
+        # 파라미터 스코프 생성 후 파라미터 등록 (중복 파라미터 검출 포함)
+        scopes.push()
+        for param in stmt.params:
+            scopes.declare(param, stmt.location)
+        self._in_function = getattr(self, "_in_function", 0) + 1
+        self._check_stmt(stmt.body, scopes)
+        self._in_function -= 1
+        scopes.pop()
+
+    def _check_return_stmt(self, stmt: ReturnStmt, scopes: _ScopeStack) -> None:
+        if getattr(self, "_in_function", 0) == 0:
+            raise CheckError("'return' is used outside function")
+        if stmt.value is not None:
+            self._check_expr(stmt.value, scopes)
 
     # ── 식(Expr) ──────────────────────────────────────────────────────────────
 
