@@ -2,6 +2,15 @@ import pytest
 from common import *
 from Executor import *
 from Executor import Function
+from Optimizer import (
+    StaticBinder,
+    fold_constants,
+    optimize,
+    optimization_stats,
+    resolve_bindings,
+    BindingInfo,
+    BindingTable,
+)
 
 
 def test_calculate_error_division_by_zero():
@@ -401,3 +410,132 @@ def test_execute_func_does_not_leak_params_to_caller():
     )))
     with pytest.raises(ExecuteError):
         calc._environment.lookup("secret")
+
+
+# ── Optimizer + Executor 통합 테스트 ─────────────────────────────────────────
+#
+# optimize() / fold_constants() 로 컴파일된 Program 을 실제로 execute() 하여
+# 결과가 올바른지, 런타임 계산이 생략됐는지 end-to-end 로 검증한다.
+
+class TestOptimizerExecutorIntegration:
+
+    def test_optimize_then_execute_constant_fold(self):
+        """(+ 1 (* 2 3)) → optimize → execute 결과가 7.0이다."""
+        inner = ListExpr((IdentifierExpr("*"), LiteralExpr(2.0), LiteralExpr(3.0)))
+        outer = ListExpr((IdentifierExpr("+"), LiteralExpr(1.0), inner))
+        program = Program((ExpressionStmt(outer),))
+        optimized = optimize(program)
+        assert execute(optimized) == pytest.approx(7.0)
+
+    def test_fold_constants_then_execute_nested(self):
+        """fold_constants() 로 접힌 식을 execute 해도 동일한 결과를 낸다."""
+        inner = ListExpr((IdentifierExpr("*"), LiteralExpr(3.0), LiteralExpr(4.0)))
+        outer = ListExpr((IdentifierExpr("+"), LiteralExpr(2.0), inner))
+        program = Program((ExpressionStmt(outer),))
+        folded = fold_constants(program)
+        assert execute(folded) == pytest.approx(14.0)
+
+    def test_optimize_with_variable_still_executes_correctly(self):
+        """변수가 섞인 프로그램: 상수 부분만 접히고, 변수 부분은 런타임에 계산된다."""
+        # (+ x (* 2 3))  →  (* 2 3)은 접혀 6.0이 되고, + x 6.0은 런타임 처리
+        inner = ListExpr((IdentifierExpr("*"), LiteralExpr(2.0), LiteralExpr(3.0)))
+        outer = ListExpr((IdentifierExpr("+"), IdentifierExpr("x"), inner))
+        program = Program((
+            VarStmt(name="x", initializer=LiteralExpr(10.0)),
+            ExpressionStmt(outer),
+        ))
+        optimized = optimize(program)
+        assert execute(optimized) == pytest.approx(16.0)
+
+    def test_fold_constants_reduces_list_expr_calls_to_zero(self, mocker):
+        """
+        완전 상수 프로그램에서 fold 후 _execute_list_expr 호출 횟수가 0이다.
+        """
+        inner = ListExpr((IdentifierExpr("*"), LiteralExpr(2.0), LiteralExpr(3.0)))
+        outer = ListExpr((IdentifierExpr("+"), LiteralExpr(1.0), inner))
+        program = Program((ExpressionStmt(outer),))
+
+        folded = fold_constants(program)
+        exec_instance = SExpressionExecutor()
+        spy = mocker.spy(exec_instance, "_execute_list_expr")
+        exec_instance.execute(folded)
+        assert spy.call_count == 0
+
+    def test_optimization_stats_after_fold_execute(self):
+        """fold_constants() 결과에 optimization_stats 가 정확히 기록된다."""
+        inner = ListExpr((IdentifierExpr("*"), LiteralExpr(2.0), LiteralExpr(3.0)))
+        outer = ListExpr((IdentifierExpr("+"), LiteralExpr(1.0), inner))
+        program = Program((ExpressionStmt(outer),))
+        folded = fold_constants(program)
+        execute(folded)
+        stats = optimization_stats(folded)
+        assert stats["folded_expressions"] == 2
+
+    def test_resolve_bindings_reports_correct_distance(self):
+        """resolve_bindings 는 변수가 N단계 위 스코프에 있음을 올바르게 반환한다."""
+        # (var a 1)  { { { (print a) } } }  →  a는 distance 3
+        program = Program((
+            VarStmt(name="a", initializer=LiteralExpr(1.0)),
+            BlockStmt((
+                BlockStmt((
+                    BlockStmt((
+                        PrintStmt(IdentifierExpr("a")),
+                    )),
+                )),
+            )),
+        ))
+        table = resolve_bindings(program)
+        assert table.lookup("a").distance == 3
+
+    def test_optimize_preserves_result_for_nested_constant(self, capsys):
+        """optimize() 후 print 결과가 올바른지 캡처로 검증한다."""
+        # (print (+ (* 3 3) (* 4 4)))  →  25.0
+        inner1 = ListExpr((IdentifierExpr("*"), LiteralExpr(3.0), LiteralExpr(3.0)))
+        inner2 = ListExpr((IdentifierExpr("*"), LiteralExpr(4.0), LiteralExpr(4.0)))
+        outer = ListExpr((IdentifierExpr("+"), inner1, inner2))
+        program = Program((PrintStmt(outer),))
+        optimized = optimize(program)
+        execute(optimized)
+        assert capsys.readouterr().out.strip() == "25.0"
+
+    def test_optimize_result_passable_to_check_then_execute(self):
+        """optimize() → check() → execute() 전체 파이프라인이 에러 없이 작동한다."""
+        from Checker import check
+        inner = ListExpr((IdentifierExpr("*"), LiteralExpr(6.0), LiteralExpr(6.0)))
+        outer = ListExpr((IdentifierExpr("+"), inner, LiteralExpr(0.0)))
+        program = Program((
+            VarStmt(name="result", initializer=outer),
+            ExpressionStmt(IdentifierExpr("result")),
+        ))
+        optimized = optimize(program)
+        check(optimized)
+        result = execute(optimized)
+        assert result == pytest.approx(36.0)
+
+    def test_fold_constants_for_loop_body_reduces_calls(self, mocker):
+        """루프 body 상수 접기 후 _execute_list_expr 호출 횟수가 0이 된다."""
+        const_expr = ListExpr((IdentifierExpr("*"), LiteralExpr(3.0), LiteralExpr(4.0)))
+        program = Program((
+            ForStmt(
+                iterator="i",
+                start=LiteralExpr(0.0),
+                end=LiteralExpr(5.0),
+                body=PrintStmt(const_expr),
+            ),
+        ))
+        folded = fold_constants(program)
+        exec_instance = SExpressionExecutor()
+        spy = mocker.spy(exec_instance, "_execute_list_expr")
+        exec_instance.execute(folded)
+        assert spy.call_count == 0
+
+    def test_binding_table_lookup_returns_binding_info(self):
+        """BindingTable.lookup() 반환값이 BindingInfo 타입이다."""
+        program = Program((
+            VarStmt(name="x", initializer=LiteralExpr(1.0)),
+            PrintStmt(IdentifierExpr("x")),
+        ))
+        table = resolve_bindings(program)
+        info = table.lookup("x")
+        assert isinstance(info, BindingInfo)
+        assert info.distance == 0
