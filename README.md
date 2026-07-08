@@ -1,5 +1,19 @@
 # 모듈별 유닛 테스트 및 스텁 되돌리기 설계
 
+## 공장 제어 쉘 - 파일 모드
+
+파일 모드는 소스 파일 전체를 읽어 `tokenize -> assemble -> check -> execute` 파이프라인으로
+한 번 실행한다. 실행할 파일 경로를 인자로 전달한다.
+
+```bash
+python3 src/factory_shell.py path/to/program.txt
+```
+
+- 파일이 없으면 `File not found: <path>`를 출력하고 종료 코드 `1`을 반환한다.
+- 실행 중 런타임 오류가 발생하면 이미 출력된 내용까지만 유지한 뒤
+  `Runtime error at line <line>: <message>`를 출력하고 즉시 종료한다.
+- `print` 문에서 발생한 출력은 표준 출력으로 전달된다.
+
 ## 배경
 
 S-Expression 언어 인터프리터를 만드는 학습용 팀 프로젝트다. 각 모듈(Tokenizer, Assembler,
