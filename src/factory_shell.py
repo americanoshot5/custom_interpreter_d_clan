@@ -42,6 +42,7 @@ class DebugSession:
         self._executor = FileModeExecutor()
         self._cursor = 0
         self._breakpoints: set[int] = set()
+        self._watches: list[str] = []
 
     def run(self, commands: Sequence[str]) -> int:
         self._report_position()
@@ -65,10 +66,20 @@ class DebugSession:
         if command == "breakpoints":
             self._list_breakpoints()
             return True
+        if command == "watches":
+            self._list_watches()
+            return True
+        if command == "inspect":
+            self._inspect_scope()
+            return True
         if command.startswith("break "):
             return self._add_breakpoint(command)
         if command.startswith("remove "):
             return self._remove_breakpoint(command)
+        if command.startswith("watch "):
+            return self._add_watch(command)
+        if command.startswith("unwatch "):
+            return self._remove_watch(command)
         self._write_output(f"Unknown debug command: {command}")
         return False
 
@@ -106,13 +117,62 @@ class DebugSession:
         points = ", ".join(str(line) for line in sorted(self._breakpoints))
         self._write_output(f"Breakpoints: {points}")
 
+    def _add_watch(self, command: str) -> bool:
+        name = self._parse_name_arg(command, "watch")
+        if name is None:
+            return False
+        if name not in self._watches:
+            self._watches.append(name)
+        self._write_output(f"Watching {name}")
+        self._write_watch_value(name)
+        return True
+
+    def _remove_watch(self, command: str) -> bool:
+        name = self._parse_name_arg(command, "unwatch")
+        if name is None:
+            return False
+        if name in self._watches:
+            self._watches.remove(name)
+        self._write_output(f"Stopped watching {name}")
+        return True
+
+    def _parse_name_arg(self, command: str, name: str) -> str | None:
+        parts = command.split()
+        if len(parts) != 2:
+            self._write_output(f"Usage: {name} <variable>")
+            return None
+        return parts[1]
+
+    def _list_watches(self) -> None:
+        if not self._watches:
+            self._write_output("Watches: none")
+            return
+        for name in self._watches:
+            self._write_watch_value(name)
+
+    def _write_watch_value(self, name: str) -> None:
+        try:
+            value = self._executor._environment.lookup(name)
+        except ExecuteError:
+            value = "<undefined>"
+        self._write_output(f"Watch {name}: {value}")
+
+    def _inspect_scope(self) -> None:
+        values = self._executor._environment._values
+        if not values:
+            self._write_output("Scope: empty")
+            return
+        for name in sorted(values):
+            self._write_output(f"{name} = {values[name]}")
+
     def _continue(self) -> None:
         while not self._is_finished():
-            if self._current_line() in self._breakpoints:
-                self._report_position()
-                return
+            current_line = self._current_line()
             self._execute_current_statement()
             self._cursor += 1
+            if current_line in self._breakpoints:
+                self._report_position()
+                return
         self._report_position()
 
     def _step(self) -> None:
@@ -132,8 +192,12 @@ class DebugSession:
     def _report_position(self) -> None:
         if self._is_finished():
             self._write_output("Program finished")
+            if self._watches:
+                self._list_watches()
             return
         self._write_output(f"Stopped at line {self._current_line()}")
+        if self._watches:
+            self._list_watches()
 
     def _current_line(self) -> int | None:
         stmt = self._program.statements[self._cursor]
