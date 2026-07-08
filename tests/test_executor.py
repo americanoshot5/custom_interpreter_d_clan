@@ -1,6 +1,7 @@
 import pytest
 from common import *
 from Executor import *
+from Executor import Function
 
 
 def test_calculate_error_division_by_zero():
@@ -179,3 +180,158 @@ def test_execute_error_varstmt():
 
     with pytest.raises(ExecuteError):
         calc._environment.lookup('test_fail')
+
+def test_execute_funcstmt(capsys):
+    func_name = "add"
+    func_params = ("a","b")
+    func_body = BlockStmt((VarStmt(name='plus', initializer=ListExpr((IdentifierExpr("+"), IdentifierExpr("a"), IdentifierExpr("b")))),
+                      ReturnStmt(IdentifierExpr("plus")),
+                      ))
+
+    program = Program(
+        (
+            FuncDefStmt(name=func_name, params=func_params, body=func_body),
+            PrintStmt(ListExpr((IdentifierExpr(func_name), LiteralExpr(6), LiteralExpr(3)))),
+        )
+    )
+
+    calc = SExpressionExecutor()
+    calc.execute(program)
+
+    captured = capsys.readouterr()
+    assert captured.out == "9\n"
+
+def test_execute_funcdefstmt_defines_name():
+    calc = SExpressionExecutor()
+    calc.execute(Program(
+        (FuncDefStmt(name="greet", params=(), body=PrintStmt(LiteralExpr("hi"))),)
+    ))
+    assert isinstance(calc._environment.lookup("greet"), Function)
+
+
+def test_execute_func_return_value():
+    program = Program((
+        FuncDefStmt(
+            name="square",
+            params=("x",),
+            body=ReturnStmt(ListExpr((IdentifierExpr("*"), IdentifierExpr("x"), IdentifierExpr("x")))),
+        ),
+        ExpressionStmt(ListExpr((IdentifierExpr("square"), LiteralExpr(4.0)))),
+    ))
+    assert execute(program) == 16.0
+
+
+def test_execute_func_no_params():
+    program = Program((
+        FuncDefStmt(
+            name="get42",
+            params=(),
+            body=ReturnStmt(LiteralExpr(42.0)),
+        ),
+        ExpressionStmt(ListExpr((IdentifierExpr("get42"),))),
+    ))
+    assert execute(program) == 42.0
+
+
+def test_execute_func_implicit_none_return():
+    program = Program((
+        FuncDefStmt(
+            name="nothing",
+            params=(),
+            body=PrintStmt(LiteralExpr("side-effect")),
+        ),
+        ExpressionStmt(ListExpr((IdentifierExpr("nothing"),))),
+    ))
+    result = execute(program)
+    assert result is None
+
+
+def test_execute_func_return_no_value_is_none():
+    program = Program((
+        FuncDefStmt(
+            name="early_exit",
+            params=("x",),
+            body=ReturnStmt(value=None),
+        ),
+        ExpressionStmt(ListExpr((IdentifierExpr("early_exit"), LiteralExpr(99.0)))),
+    ))
+    assert execute(program) is None
+
+
+def test_execute_func_arg_count_mismatch_raises():
+    program = Program((
+        FuncDefStmt(
+            name="add",
+            params=("a", "b"),
+            body=ReturnStmt(LiteralExpr(0.0)),
+        ),
+        ExpressionStmt(ListExpr((IdentifierExpr("add"), LiteralExpr(1.0)))),
+    ))
+    with pytest.raises(ExecuteError):
+        execute(program)
+
+
+def test_execute_func_too_many_args_raises():
+    program = Program((
+        FuncDefStmt(
+            name="one_param",
+            params=("x",),
+            body=ReturnStmt(LiteralExpr(0.0)),
+        ),
+        ExpressionStmt(ListExpr((
+            IdentifierExpr("one_param"), LiteralExpr(1.0), LiteralExpr(2.0)
+        ))),
+    ))
+    with pytest.raises(ExecuteError):
+        execute(program)
+
+
+def test_execute_func_recursive_factorial():
+    fac_body = IfStmt(
+        condition=ListExpr((IdentifierExpr("="), IdentifierExpr("n"), LiteralExpr(0.0))),
+        then_branch=ReturnStmt(LiteralExpr(1.0)),
+        else_branch=ReturnStmt(
+            ListExpr((
+                IdentifierExpr("*"),
+                IdentifierExpr("n"),
+                ListExpr((
+                    IdentifierExpr("fac"),
+                    ListExpr((IdentifierExpr("-"), IdentifierExpr("n"), LiteralExpr(1.0))),
+                )),
+            ))
+        ),
+    )
+    program = Program((
+        FuncDefStmt(name="fac", params=("n",), body=fac_body),
+        ExpressionStmt(ListExpr((IdentifierExpr("fac"), LiteralExpr(5.0)))),
+    ))
+    assert execute(program) == 120.0
+
+
+def test_execute_func_closure_captures_env():
+    program = Program((
+        VarStmt(name="factor", initializer=LiteralExpr(3.0)),
+        FuncDefStmt(
+            name="triple",
+            params=("x",),
+            body=ReturnStmt(ListExpr((
+                IdentifierExpr("*"), IdentifierExpr("x"), IdentifierExpr("factor")
+            ))),
+        ),
+        ExpressionStmt(ListExpr((IdentifierExpr("triple"), LiteralExpr(7.0)))),
+    ))
+    assert execute(program) == 21.0
+
+
+def test_execute_func_does_not_leak_params_to_caller():
+    calc = SExpressionExecutor()
+    calc.execute(Program((
+        FuncDefStmt(
+            name="f",
+            params=("secret",),
+            body=ReturnStmt(LiteralExpr(0.0)),
+        ),
+        ExpressionStmt(ListExpr((IdentifierExpr("f"), LiteralExpr(42.0)))),
+    )))
+    with pytest.raises(ExecuteError):
+        calc._environment.lookup("secret")

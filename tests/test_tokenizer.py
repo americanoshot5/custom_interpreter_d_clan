@@ -188,3 +188,49 @@ def test_tokenize_Dot_operation():
     tokens = src.tokenize()
     assert tokens[0].type == TokenType.DOTIDENTIFIER
     assert tokens[0].literal == "Null.Null"
+
+
+# ============================================================
+# func / return 키워드 토크나이징
+# ============================================================
+
+def test_tokenize_func_keyword():
+    src = SExpressionTokenizer("func")
+    tokens = src.tokenize()
+    assert tokens[0].type == TokenType.FUNC
+    assert tokens[0].lexeme == "func"
+
+
+def test_tokenize_return_keyword():
+    src = SExpressionTokenizer("return")
+    tokens = src.tokenize()
+    assert tokens[0].type == TokenType.RETURN
+    assert tokens[0].lexeme == "return"
+
+
+def test_tokenize_func_keyword_case_insensitive():
+    src = SExpressionTokenizer("FUNC")
+    tokens = src.tokenize()
+    assert tokens[0].type == TokenType.FUNC
+
+
+def test_tokenize_func_in_expression():
+    src = SExpressionTokenizer("(func add (a b) (print a))")
+    tokens = src.tokenize()
+    types = [t.type for t in tokens]
+    assert TokenType.FUNC in types
+    assert types[1] == TokenType.FUNC
+
+
+def test_tokenize_return_in_expression():
+    src = SExpressionTokenizer("(return 42)")
+    tokens = src.tokenize()
+    assert tokens[1].type == TokenType.RETURN
+
+
+def test_tokenize_return_no_value():
+    src = SExpressionTokenizer("(return)")
+    tokens = src.tokenize()
+    assert tokens[0].type == TokenType.LEFT_PAREN
+    assert tokens[1].type == TokenType.RETURN
+    assert tokens[2].type == TokenType.RIGHT_PAREN
