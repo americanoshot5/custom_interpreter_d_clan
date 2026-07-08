@@ -209,44 +209,49 @@ class SExpressionExecutor(Executor):
         except TypeError as e:
             raise ExecuteError(str(e)) from e
 
+    @staticmethod
+    def _as_array_size(value: RuntimeValue) -> int:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ExecuteError(f"Array size must be a number, got {type(value).__name__}")
+        size = int(value)
+        if size < 0:
+            raise ExecuteError(f"Array size must be non-negative, got {size}")
+        return size
+
+    @staticmethod
+    def _as_array_index(array: list, value: RuntimeValue) -> int:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ExecuteError(f"Array index must be a number, got {type(value).__name__}")
+        idx = int(value)
+        if idx < 0 or idx >= len(array):
+            raise ExecuteError(f"Array index {idx} out of bounds for array of size {len(array)}")
+        return idx
+
+    def _eval_array_arg(self, expr: ListExpr) -> list:
+        array = self._execute_expr(expr.elements[1])
+        if not isinstance(array, list):
+            raise ExecuteError("Cannot index non-array value")
+        return array
+
     def _execute_array_op(self, op: str, expr: ListExpr) -> RuntimeValue:
         if op == "Array":
             if len(expr.elements) != 2:
                 raise ExecuteError("Array takes exactly 1 argument (size)")
-            size = self._execute_expr(expr.elements[1])
-            if isinstance(size, bool) or not isinstance(size, (int, float)):
-                raise ExecuteError(f"Array size must be a number, got {type(size).__name__}")
-            size_int = int(size)
-            if size_int < 0:
-                raise ExecuteError(f"Array size must be non-negative, got {size_int}")
-            return [None] * size_int
+            size = self._as_array_size(self._execute_expr(expr.elements[1]))
+            return [None] * size
 
         if op == "index":
             if len(expr.elements) != 3:
                 raise ExecuteError("index takes exactly 2 arguments (array, index)")
-            array = self._execute_expr(expr.elements[1])
-            if not isinstance(array, list):
-                raise ExecuteError("Cannot index non-array value")
-            index = self._execute_expr(expr.elements[2])
-            if isinstance(index, bool) or not isinstance(index, (int, float)):
-                raise ExecuteError(f"Array index must be a number, got {type(index).__name__}")
-            idx = int(index)
-            if idx < 0 or idx >= len(array):
-                raise ExecuteError(f"Array index {idx} out of bounds for array of size {len(array)}")
+            array = self._eval_array_arg(expr)
+            idx = self._as_array_index(array, self._execute_expr(expr.elements[2]))
             return array[idx]
 
         # op == "set-index!"
         if len(expr.elements) != 4:
             raise ExecuteError("set-index! takes exactly 3 arguments (array, index, value)")
-        array = self._execute_expr(expr.elements[1])
-        if not isinstance(array, list):
-            raise ExecuteError("Cannot index non-array value")
-        index = self._execute_expr(expr.elements[2])
-        if isinstance(index, bool) or not isinstance(index, (int, float)):
-            raise ExecuteError(f"Array index must be a number, got {type(index).__name__}")
-        idx = int(index)
-        if idx < 0 or idx >= len(array):
-            raise ExecuteError(f"Array index {idx} out of bounds for array of size {len(array)}")
+        array = self._eval_array_arg(expr)
+        idx = self._as_array_index(array, self._execute_expr(expr.elements[2]))
         value = self._execute_expr(expr.elements[3])
         array[idx] = value
         return value
