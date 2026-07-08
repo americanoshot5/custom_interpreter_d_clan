@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from common import CheckError
+from common import CheckError, ExecuteError
 
 from _helpers import run as _run
 
@@ -95,4 +95,26 @@ def test_import_inside_for_loop_raises_check_error(tmp_path):
       (import "{lib}" alias sum))
     """
     with pytest.raises(CheckError, match="import.*for|loop"):
+        _run(source)
+
+
+def test_import_read_variable_from_module_without_calling(tmp_path, capsys):
+    lib = tmp_path / "constants.cf"
+    lib.write_text("(var answer 42)", encoding="utf-8")
+    source = f"""
+    (import "{lib}" alias constants)
+    (print constants.answer)
+    """
+    _run(source)
+    assert capsys.readouterr().out.strip() == "42.0"
+
+
+def test_import_calling_missing_member_raises_execute_error(tmp_path):
+    lib = tmp_path / "sum.cf"
+    lib.write_text("(var answer 42)", encoding="utf-8")
+    source = f"""
+    (import "{lib}" alias sum)
+    (print (sum.add 1 2))
+    """
+    with pytest.raises(ExecuteError):
         _run(source)
