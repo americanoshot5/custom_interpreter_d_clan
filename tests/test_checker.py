@@ -728,7 +728,7 @@ class TestFuncDefStmt:
 #
 # 검증 전략:
 #  - 바인딩 맵의 distance 값이 실제 스코프 깊이와 일치하는지 확인
-#  - mocker.spy 로 _resolve_distance 호출 횟수 = 식별자 개수와 같음을 검증
+#  - unittest.mock.patch.object(..., wraps=...) 로 _resolve_distance 호출 횟수 = 식별자 개수와 같음을 검증
 #  - 계산된 distance 로 Environment 체인에서 직접 접근 가능함을 실증
 
 class TestStaticBinder:
@@ -831,8 +831,6 @@ class TestStaticBinder:
             print_stmt(list_expr(plus_ref, x_ref, y_ref)),
         )
         binder = StaticBinder()
-        # spy = mocker.spy(binder, "_resolve_distance")
-        # binder.bind(program)
         with umock.patch.object(binder, "_resolve_distance", wraps=binder._resolve_distance) as spy:
             binder.bind(program)
         assert spy.call_count == 3  # x, y, + 각 1회
@@ -879,7 +877,7 @@ class TestStaticBinder:
 #
 # 검증 전략:
 #  - fold() 후 AST 노드 타입이 LiteralExpr로 치환됐는지 직접 확인
-#  - mocker.spy로 Executor._execute_list_expr 호출 횟수를
+#  - unittest.mock.patch.object(..., wraps=...)로 Executor._execute_list_expr 호출 횟수를
 #    접기 전 N회 → 접기 후 0회로 줄었음을 계량적으로 검증
 #  - 원본 Program이 불변(frozen dataclass)임을 확인
 
@@ -1013,16 +1011,12 @@ class TestConstantFolder:
         program = prog(expr_stmt(outer))
 
         exec_before = SExpressionExecutor()
-        # spy_before = mocker.spy(exec_before, "_execute_list_expr")
-        # exec_before.execute(program)
         with umock.patch.object(exec_before, "_execute_list_expr", wraps=exec_before._execute_list_expr) as spy_before:
             exec_before.execute(program)
         assert spy_before.call_count == 2
 
         folded = ConstantFolder().fold(program)
         exec_after = SExpressionExecutor()
-        # spy_after = mocker.spy(exec_after, "_execute_list_expr")
-        # exec_after.execute(folded)
         with umock.patch.object(exec_after, "_execute_list_expr", wraps=exec_after._execute_list_expr) as spy_after:
             exec_after.execute(folded)
         assert spy_after.call_count == 0
@@ -1038,16 +1032,12 @@ class TestConstantFolder:
         program = prog(for_stmt("i", lit(0.0), lit(10.0), print_stmt(const_expr)))
 
         exec_before = SExpressionExecutor()
-        # spy_before = mocker.spy(exec_before, "_execute_list_expr")
-        # exec_before.execute(program)
         with umock.patch.object(exec_before, "_execute_list_expr", wraps=exec_before._execute_list_expr) as spy_before:
             exec_before.execute(program)
         assert spy_before.call_count == 10
 
         folded = ConstantFolder().fold(program)
         exec_after = SExpressionExecutor()
-        spy_after = mocker.spy(exec_after, "_execute_list_expr")
-        exec_after.execute(folded)
         with umock.patch.object(exec_after, "_execute_list_expr", wraps=exec_after._execute_list_expr) as spy_after:
             exec_after.execute(folded)
         assert spy_after.call_count == 0
