@@ -21,6 +21,7 @@ from common import (
     IfStmt,
     ListExpr,
     LiteralExpr,
+    NewExpr,
     PrintStmt,
     Program,
     SourceLocation,
@@ -95,6 +96,30 @@ def test_assemble_nested_list_expression():
     assert isinstance(inner_head, IdentifierExpr) and inner_head.name == "*"
     assert inner_a.value == 2.0
     assert inner_b.value == 3.0
+
+
+def test_assemble_new_expr():
+    """(new Foo 1 2) 는 NewExpr(class_name='Foo', args=(1.0, 2.0)) 로 파싱되어야 한다.
+
+    회귀 테스트: NewExpr 에 @dataclass(frozen=True, slots=True) 데코레이터가
+    빠져 있으면 Expr 의 kw_only __init__ 을 상속받아 class_name/args 키워드
+    인자를 받아들이지 못하고 TypeError 가 발생한다.
+    """
+    tokens = [
+        lparen(),
+        tok(TokenType.NEW, "new"),
+        ident("Foo"),
+        num(1.0),
+        num(2.0),
+        rparen(),
+        eof(),
+    ]
+    expr = unwrap(tokens)
+    assert isinstance(expr, NewExpr)
+    assert expr.class_name == "Foo"
+    assert len(expr.args) == 2
+    assert expr.args[0].value == 1.0
+    assert expr.args[1].value == 2.0
 
 
 def test_assemble_missing_closing_paren_raises():

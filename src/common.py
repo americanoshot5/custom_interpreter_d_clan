@@ -164,6 +164,7 @@ class ArrayIndexExpr(Expr):
     array: Expr
     index: Expr
 
+@dataclass(frozen=True, slots=True)
 class NewExpr(Expr):
     """(new ClassName args...)"""
     class_name: str
