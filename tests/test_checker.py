@@ -24,6 +24,7 @@ from common import (
     CheckError,
     ExpressionStmt,
     ForStmt,
+    FuncDefStmt,
     IdentifierExpr,
     IfStmt,
     ImportStmt,
@@ -31,6 +32,7 @@ from common import (
     LiteralExpr,
     PrintStmt,
     Program,
+    ReturnStmt,
     SourceLocation,
     Stmt,
     VarStmt,
@@ -90,6 +92,12 @@ def for_stmt(
 
 def import_stmt(path_expr, alias: str, line: int = 1, col: int = 1) -> ImportStmt:
     return ImportStmt(path=path_expr, alias=alias, location=loc(line, col))
+def func_def(name: str, params: tuple, body, line: int = 1, col: int = 1) -> FuncDefStmt:
+    return FuncDefStmt(name=name, params=params, body=body, location=loc(line, col))
+
+
+def ret(value=None) -> ReturnStmt:
+    return ReturnStmt(value=value)
 
 
 # ── 기존 스켈레톤 테스트 유지 ────────────────────────────────────────────────
@@ -619,3 +627,85 @@ class TestImportStmt:
         program = prog(import_stmt(lit(str(lib)), alias="m"))
         with pytest.raises(CheckError, match="notDefined"):
             check(program)
+# ── 10. FuncDefStmt / ReturnStmt 검사 ────────────────────────────────────────
+
+class TestFuncDefStmt:
+    def test_func_valid_declaration(self):
+        StaticChecker().check(prog(
+            func_def("add", ("a", "b"), print_stmt(lit(1.0)))
+        ))
+
+    def test_func_params_visible_in_body(self):
+        StaticChecker().check(prog(
+            func_def("add", ("a", "b"),
+                print_stmt(list_expr(ident("+"), ident("a"), ident("b"))))
+        ))
+
+    def test_func_name_declared_in_outer_scope(self):
+        StaticChecker().check(prog(
+            func_def("add", ("a", "b"), print_stmt(lit(0.0))),
+            expr_stmt(ident("add")),
+        ))
+
+    def test_func_recursive_call_allowed(self):
+        StaticChecker().check(prog(
+            func_def("fac", ("n",),
+                print_stmt(list_expr(ident("fac"), ident("n"))))
+        ))
+
+    def test_func_duplicate_param_raises(self):
+        with pytest.raises(CheckError, match="already declared"):
+            StaticChecker().check(prog(
+                func_def("f", ("x", "x"), print_stmt(lit(0.0)))
+            ))
+
+    def test_func_params_not_visible_outside(self):
+        with pytest.raises(CheckError, match="Undefined variable 'a'"):
+            StaticChecker().check(prog(
+                func_def("add", ("a", "b"), print_stmt(lit(0.0))),
+                expr_stmt(ident("a")),
+            ))
+
+    def test_func_undefined_var_in_body_raises(self):
+        with pytest.raises(CheckError, match="Undefined variable 'missing'"):
+            StaticChecker().check(prog(
+                func_def("f", ("x",), print_stmt(ident("missing")))
+            ))
+
+    def test_return_inside_function_valid(self):
+        StaticChecker().check(prog(
+            func_def("f", ("x",), block(ret(ident("x"))))
+        ))
+
+    def test_return_no_value_inside_function_valid(self):
+        StaticChecker().check(prog(
+            func_def("f", ("x",), block(ret()))
+        ))
+
+    def test_return_outside_function_raises(self):
+        with pytest.raises(CheckError, match="outside function"):
+            StaticChecker().check(prog(ret(lit(1.0))))
+
+    def test_return_value_checked_for_undefined_var(self):
+        with pytest.raises(CheckError, match="Undefined variable 'ghost'"):
+            StaticChecker().check(prog(
+                func_def("f", (), block(ret(ident("ghost"))))
+            ))
+
+    def test_func_name_duplicate_with_outer_var_raises(self):
+        with pytest.raises(CheckError, match="already declared"):
+            StaticChecker().check(prog(
+                var("f", lit(1.0)),
+                func_def("f", (), print_stmt(lit(0.0))),
+            ))
+
+    def test_func_outer_var_visible_in_body(self):
+        StaticChecker().check(prog(
+            var("global_x", lit(10.0)),
+            func_def("use_global", (),
+                print_stmt(ident("global_x"))),
+        ))
+
+    def test_return_outside_function_top_level_raises(self):
+        with pytest.raises(CheckError):
+            StaticChecker().check(prog(ret()))

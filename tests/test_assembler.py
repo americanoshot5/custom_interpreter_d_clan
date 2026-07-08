@@ -18,6 +18,7 @@ from common import (
     DotExpr,
     ExpressionStmt,
     ForStmt,
+    FuncDefStmt,
     IdentifierExpr,
     IfStmt,
     ListExpr,
@@ -25,6 +26,7 @@ from common import (
     NewExpr,
     PrintStmt,
     Program,
+    ReturnStmt,
     SourceLocation,
     Token,
     TokenType,
@@ -1179,3 +1181,177 @@ def test_import_stmt_missing_alias_keyword_raises():
     ]
     with pytest.raises(AssembleError):
         SExpressionAssembler(tokens).assemble()
+# ============================================================
+# 24. FuncDefStmt
+# ============================================================
+
+def test_func_stmt_basic():
+    """(func add (a b) (print a)) → FuncDefStmt(name="add", params=("a","b"), body=PrintStmt)"""
+    tokens = [
+        lparen(), kw(TokenType.FUNC),
+        ident("add"),
+        lparen(), ident("a"), ident("b"), rparen(),
+        lparen(), kw(TokenType.PRINT), ident("a"), rparen(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    assert len(prog.statements) == 1
+    stmt = prog.statements[0]
+    assert isinstance(stmt, FuncDefStmt)
+    assert stmt.name == "add"
+    assert stmt.params == ("a", "b")
+    assert isinstance(stmt.body, PrintStmt)
+
+
+def test_func_stmt_no_params():
+    """(func noop () (print 1)) → FuncDefStmt(params=())"""
+    tokens = [
+        lparen(), kw(TokenType.FUNC),
+        ident("noop"),
+        lparen(), rparen(),
+        lparen(), kw(TokenType.PRINT), num(1.0), rparen(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, FuncDefStmt)
+    assert stmt.name == "noop"
+    assert stmt.params == ()
+
+
+def test_func_stmt_single_param():
+    """(func neg (x) (print x)) → FuncDefStmt(params=("x",))"""
+    tokens = [
+        lparen(), kw(TokenType.FUNC),
+        ident("neg"),
+        lparen(), ident("x"), rparen(),
+        lparen(), kw(TokenType.PRINT), ident("x"), rparen(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, FuncDefStmt)
+    assert stmt.params == ("x",)
+
+
+def test_func_stmt_location():
+    """FuncDefStmt의 location은 여는 괄호 토큰 위치여야 한다."""
+    tokens = [
+        lparen(line=3, col=5), kw(TokenType.FUNC),
+        ident("f"),
+        lparen(), rparen(),
+        lparen(), kw(TokenType.PRINT), num(1.0), rparen(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert stmt.location.line == 3
+    assert stmt.location.column == 5
+
+
+def test_func_stmt_missing_name_raises():
+    """(func (a) (print a)) — 함수 이름 없이 바로 파라미터 리스트가 오면 AssembleError"""
+    tokens = [
+        lparen(), kw(TokenType.FUNC),
+        lparen(), ident("a"), rparen(),
+        lparen(), kw(TokenType.PRINT), ident("a"), rparen(),
+        rparen(), eof(),
+    ]
+    with pytest.raises(AssembleError):
+        SExpressionAssembler(tokens).assemble()
+
+
+def test_func_stmt_missing_param_paren_raises():
+    """(func add a (print a)) — 파라미터 리스트의 ( 없이 IDENTIFIER가 오면 AssembleError"""
+    tokens = [
+        lparen(), kw(TokenType.FUNC),
+        ident("add"),
+        ident("a"),
+        lparen(), kw(TokenType.PRINT), ident("a"), rparen(),
+        rparen(), eof(),
+    ]
+    with pytest.raises(AssembleError):
+        SExpressionAssembler(tokens).assemble()
+
+
+def test_func_stmt_unclosed_param_list_raises():
+    """(func add (a — 파라미터 리스트가 닫히지 않으면 AssembleError"""
+    tokens = [
+        lparen(), kw(TokenType.FUNC),
+        ident("add"),
+        lparen(), ident("a"),
+        eof(),
+    ]
+    with pytest.raises(AssembleError):
+        SExpressionAssembler(tokens).assemble()
+
+
+def test_func_stmt_body_is_block():
+    """(func f () { (print 1) }) — body가 BlockStmt인 경우"""
+    tokens = [
+        lparen(), kw(TokenType.FUNC),
+        ident("f"),
+        lparen(), rparen(),
+        lbrace(), lparen(), kw(TokenType.PRINT), num(1.0), rparen(), rbrace(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, FuncDefStmt)
+    assert isinstance(stmt.body, BlockStmt)
+
+
+# ============================================================
+# 25. ReturnStmt
+# ============================================================
+
+def test_return_stmt_with_value():
+    """(return 42) → ReturnStmt(value=LiteralExpr(42.0))"""
+    tokens = [lparen(), kw(TokenType.RETURN), num(42.0), rparen(), eof()]
+    prog = SExpressionAssembler(tokens).assemble()
+    assert len(prog.statements) == 1
+    stmt = prog.statements[0]
+    assert isinstance(stmt, ReturnStmt)
+    assert isinstance(stmt.value, LiteralExpr)
+    assert stmt.value.value == 42.0
+
+
+def test_return_stmt_no_value():
+    """(return) → ReturnStmt(value=None)"""
+    tokens = [lparen(), kw(TokenType.RETURN), rparen(), eof()]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, ReturnStmt)
+    assert stmt.value is None
+
+
+def test_return_stmt_with_identifier():
+    """(return x) → ReturnStmt(value=IdentifierExpr("x"))"""
+    tokens = [lparen(), kw(TokenType.RETURN), ident("x"), rparen(), eof()]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, ReturnStmt)
+    assert isinstance(stmt.value, IdentifierExpr)
+    assert stmt.value.name == "x"
+
+
+def test_return_stmt_with_expression():
+    """(return (+ 1 2)) → ReturnStmt(value=ListExpr(...))"""
+    tokens = [
+        lparen(), kw(TokenType.RETURN),
+        lparen(), tok(TokenType.PLUS, "+"), num(1.0), num(2.0), rparen(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, ReturnStmt)
+    assert isinstance(stmt.value, ListExpr)
+
+
+def test_return_stmt_location():
+    """ReturnStmt의 location은 여는 괄호 토큰 위치여야 한다."""
+    tokens = [lparen(line=7, col=2), kw(TokenType.RETURN), num(1.0), rparen(), eof()]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert stmt.location.line == 7
+    assert stmt.location.column == 2
