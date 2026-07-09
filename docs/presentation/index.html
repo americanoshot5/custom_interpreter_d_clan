@@ -59,7 +59,7 @@
           </article>
           <article>
             <strong>김상민님</strong>
-            <p>Test code 작성 / import 문 &amp; Prompt Shell</p>
+            <p>통합테스트 / import 문 &amp; Prompt Shell</p>
             <span>조장</span>
           </article>
         </div>
@@ -119,9 +119,9 @@
         <div class="comparison">
           <article class="snippet before">
             <h3>Before</h3>
-            <pre><code>((var total 0)
-(set! total (+ total 1))
-(print total))</code></pre>
+            <pre><code><span class="global-paren">((</span>var total 0<span class="global-paren">)</span>
+<span class="global-paren">(</span>set! total (+ total 1)<span class="global-paren">)</span>
+<span class="global-paren">(</span>print total<span class="global-paren">))</span></code></pre>
           </article>
           <article class="snippet after">
             <h3>After</h3>
@@ -330,7 +330,7 @@ True
       <section class="section" id="refactor">
         <div class="section-heading">
           <p class="eyebrow">Best Practices</p>
-          <h2>Best Practices 사례</h2>
+          <h2>Best Practices</h2>
           <p>
             기능을 완성하는 것만큼 중요했던 것은, 새 코드가 들어와도 이전
             기능을 믿을 수 있고 문제를 빠르게 발견할 수 있는 협업 구조였다.
@@ -400,21 +400,21 @@ True
           <h3>회귀 테스트 분포</h3>
           <div class="test-groups">
             <section>
-              <h4>모듈 테스트 499</h4>
+              <h4>모듈 테스트 504</h4>
               <div class="summary-total module-total">
-                <strong>499</strong>
+                <strong>504</strong>
                 <span>Tokenizer / Assembler / Checker / Executor / Shell 단위 책임을 고정하는 테스트</span>
               </div>
             </section>
             <section>
-              <h4>통합 테스트 93</h4>
+              <h4>통합 테스트 96</h4>
               <div class="summary-total integration-total">
-                <strong>93</strong>
+                <strong>96</strong>
                 <span>function / class / array / import / optimization / prompt shell / end-to-end</span>
               </div>
             </section>
           </div>
-          <p class="metric">총 592개 pytest 수집 테스트</p>
+          <p class="metric">총 600개 pytest 수집 테스트</p>
           <div class="quality-grid">
             <article>
               <strong>GitHub Actions</strong>
