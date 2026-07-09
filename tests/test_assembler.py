@@ -13,8 +13,11 @@ from __future__ import annotations
 import pytest
 
 from common import (
+    ArrayExpr,
+    ArrayIndexExpr,
     AssembleError,
     BlockStmt,
+    ClassStmt,
     DotExpr,
     ExpressionStmt,
     ForStmt,
@@ -23,11 +26,13 @@ from common import (
     IfStmt,
     ListExpr,
     LiteralExpr,
+    MethodDef,
     NewExpr,
     PrintStmt,
     Program,
     ReturnStmt,
     SourceLocation,
+    SuperExpr,
     Token,
     TokenType,
     Stmt,
@@ -197,6 +202,18 @@ def lbrace(line: int = 1, col: int = 1) -> Token:
 
 def rbrace(line: int = 1, col: int = 1) -> Token:
     return tok(TokenType.RIGHT_BRACE, "}", line=line, col=col)
+
+
+def lbracket(line: int = 1, col: int = 1) -> Token:
+    return tok(TokenType.LEFT_BRACKET, "[", line=line, col=col)
+
+
+def rbracket(line: int = 1, col: int = 1) -> Token:
+    return tok(TokenType.RIGHT_BRACKET, "]", line=line, col=col)
+
+
+def dotident(lexeme: str, line: int = 1, col: int = 1) -> Token:
+    return tok(TokenType.DOTIDENTIFIER, lexeme, line=line, col=col)
 
 
 def unwrap(tokens: list[Token]):
@@ -1355,3 +1372,487 @@ def test_return_stmt_location():
     stmt = prog.statements[0]
     assert stmt.location.line == 7
     assert stmt.location.column == 2
+
+
+# ============================================================
+# 26. ClassStmt — 구 문법 (old syntax)
+# ============================================================
+
+def test_class_stmt_old_empty():
+    """(class Empty) → ClassStmt with no fields/methods."""
+    tokens = [lparen(), kw(TokenType.CLASS), ident("Empty"), rparen(), eof()]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, ClassStmt)
+    assert stmt.name == "Empty"
+    assert stmt.parent is None
+    assert stmt.fields == ()
+    assert stmt.methods == ()
+
+
+def test_class_stmt_old_with_field():
+    """(class Dog (field name)) → ClassStmt with one field."""
+    tokens = [
+        lparen(), kw(TokenType.CLASS), ident("Dog"),
+        lparen(), kw(TokenType.FIELD), ident("name"), rparen(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, ClassStmt)
+    assert stmt.name == "Dog"
+    assert "name" in stmt.fields
+
+
+def test_class_stmt_old_with_parent():
+    """(class Poodle Dog) → ClassStmt with parent='Dog'."""
+    tokens = [
+        lparen(), kw(TokenType.CLASS), ident("Poodle"), ident("Dog"),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, ClassStmt)
+    assert stmt.name == "Poodle"
+    assert stmt.parent == "Dog"
+
+
+def test_class_stmt_old_with_method():
+    """(class Dog (method (speak self) (print "woof"))) → ClassStmt with one method."""
+    tokens = [
+        lparen(), kw(TokenType.CLASS), ident("Dog"),
+        lparen(), kw(TokenType.METHOD),
+            lparen(), ident("speak"), ident("self"), rparen(),
+            lparen(), kw(TokenType.PRINT), string("woof"), rparen(),
+        rparen(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, ClassStmt)
+    assert len(stmt.methods) == 1
+    m = stmt.methods[0]
+    assert isinstance(m, MethodDef)
+    assert m.name == "speak"
+    assert "self" in m.params
+    assert len(m.body) == 1
+    assert isinstance(m.body[0], PrintStmt)
+
+
+def test_class_stmt_old_field_and_method():
+    """(class Dog (field name) (method (init n) (. self name n))) → both field and method."""
+    tokens = [
+        lparen(), kw(TokenType.CLASS), ident("Dog"),
+        # (field name)
+        lparen(), kw(TokenType.FIELD), ident("name"), rparen(),
+        # (method (init n) (. self name n))
+        lparen(), kw(TokenType.METHOD),
+            lparen(), ident("init"), ident("n"), rparen(),
+            lparen(), tok(TokenType.DOT, "."), ident("self"), ident("name"), ident("n"), rparen(),
+        rparen(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, ClassStmt)
+    assert "name" in stmt.fields
+    assert stmt.methods[0].name == "init"
+
+
+def test_class_stmt_old_missing_name_raises():
+    """(class ) → AssembleError: expected class name."""
+    tokens = [lparen(), kw(TokenType.CLASS), rparen(), eof()]
+    with pytest.raises(AssembleError):
+        SExpressionAssembler(tokens).assemble()
+
+
+def test_class_stmt_old_bad_member_raises():
+    """(class Dog (var x)) → AssembleError: expected field or method."""
+    tokens = [
+        lparen(), kw(TokenType.CLASS), ident("Dog"),
+        lparen(), kw(TokenType.VAR), ident("x"), rparen(),
+        rparen(), eof(),
+    ]
+    with pytest.raises(AssembleError):
+        SExpressionAssembler(tokens).assemble()
+
+
+def test_class_stmt_old_location():
+    """ClassStmt.location은 여는 괄호 위치다."""
+    tokens = [lparen(line=3, col=5), kw(TokenType.CLASS), ident("Cat"), rparen(), eof()]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert stmt.location.line == 3
+    assert stmt.location.column == 5
+
+
+# ============================================================
+# 27. ClassStmt — 새 문법 (new syntax with braces)
+# ============================================================
+
+def test_class_stmt_new_empty_body():
+    """(class Cat { }) → ClassStmt with no methods."""
+    tokens = [
+        lparen(), kw(TokenType.CLASS), ident("Cat"),
+        lbrace(), rbrace(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, ClassStmt)
+    assert stmt.name == "Cat"
+    assert stmt.parent is None
+    assert stmt.fields == ()
+    assert stmt.methods == ()
+
+
+def test_class_stmt_new_with_method():
+    """(class Cat { (method speak () { (print "meow") }) }) → ClassStmt with one method."""
+    tokens = [
+        lparen(), kw(TokenType.CLASS), ident("Cat"),
+        lbrace(),
+        lparen(), kw(TokenType.METHOD), ident("speak"),
+            lparen(), rparen(),
+            lbrace(),
+                lparen(), kw(TokenType.PRINT), string("meow"), rparen(),
+            rbrace(),
+        rparen(),
+        rbrace(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, ClassStmt)
+    assert len(stmt.methods) == 1
+    m = stmt.methods[0]
+    assert m.name == "speak"
+    assert m.params == ()
+    assert len(m.body) == 1
+
+
+def test_class_stmt_new_with_params():
+    """새 문법 메서드 파라미터 파싱."""
+    tokens = [
+        lparen(), kw(TokenType.CLASS), ident("Box"),
+        lbrace(),
+        lparen(), kw(TokenType.METHOD), ident("init"),
+            lparen(), ident("x"), ident("y"), rparen(),
+            lbrace(), rbrace(),
+        rparen(),
+        rbrace(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    m = stmt.methods[0]
+    assert m.name == "init"
+    assert tuple(m.params) == ("x", "y")
+
+
+def test_class_stmt_new_with_inheritance():
+    """(class Kitten : Cat { }) → ClassStmt with parent='Cat'."""
+    tokens = [
+        lparen(), kw(TokenType.CLASS), ident("Kitten"),
+        tok(TokenType.IDENTIFIER, ":"),
+        ident("Cat"),
+        lbrace(), rbrace(),
+        rparen(), eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, ClassStmt)
+    assert stmt.name == "Kitten"
+    assert stmt.parent == "Cat"
+
+
+def test_class_stmt_new_non_method_raises():
+    """새 문법 class body에 method 외 토큰 → AssembleError."""
+    tokens = [
+        lparen(), kw(TokenType.CLASS), ident("Cat"),
+        lbrace(),
+        lparen(), kw(TokenType.VAR), ident("x"), rparen(),
+        rbrace(),
+        rparen(), eof(),
+    ]
+    with pytest.raises(AssembleError):
+        SExpressionAssembler(tokens).assemble()
+
+
+# ============================================================
+# 28. NewExpr
+# ============================================================
+
+def test_new_expr_no_args():
+    """(new Dog) → NewExpr(class_name='Dog', args=())."""
+    expr = unwrap([lparen(), kw(TokenType.NEW), ident("Dog"), rparen(), eof()])
+    assert isinstance(expr, NewExpr)
+    assert expr.class_name == "Dog"
+    assert expr.args == ()
+
+
+def test_new_expr_with_args():
+    """(new Dog 1 2) → NewExpr with two args."""
+    expr = unwrap([
+        lparen(), kw(TokenType.NEW), ident("Dog"),
+        num(1.0), num(2.0),
+        rparen(), eof(),
+    ])
+    assert isinstance(expr, NewExpr)
+    assert expr.class_name == "Dog"
+    assert len(expr.args) == 2
+    assert isinstance(expr.args[0], LiteralExpr)
+    assert expr.args[0].value == 1.0
+
+
+def test_new_expr_location():
+    """NewExpr.location은 여는 괄호 위치다."""
+    expr = unwrap([lparen(line=4, col=2), kw(TokenType.NEW), ident("Dog"), rparen(), eof()])
+    assert isinstance(expr, NewExpr)
+    assert expr.location.line == 4
+    assert expr.location.column == 2
+
+
+# ============================================================
+# 29. DotExpr — (. obj slot ...) 구문
+# ============================================================
+
+def test_dot_expr_field_read():
+    """(. obj name) → DotExpr(slot='name', args=())."""
+    expr = unwrap([
+        lparen(), tok(TokenType.DOT, "."), ident("obj"), ident("name"), rparen(), eof(),
+    ])
+    assert isinstance(expr, DotExpr)
+    assert isinstance(expr.obj, IdentifierExpr)
+    assert expr.obj.name == "obj"
+    assert expr.slot == "name"
+    assert expr.args == ()
+
+
+def test_dot_expr_field_write():
+    """(. obj name "rex") → DotExpr(slot='name', args=(LiteralExpr("rex"),))."""
+    expr = unwrap([
+        lparen(), tok(TokenType.DOT, "."), ident("obj"), ident("name"),
+        string("rex"),
+        rparen(), eof(),
+    ])
+    assert isinstance(expr, DotExpr)
+    assert expr.slot == "name"
+    assert len(expr.args) == 1
+    assert isinstance(expr.args[0], LiteralExpr)
+    assert expr.args[0].value == "rex"
+
+
+def test_dot_expr_method_call():
+    """(. obj speak 42) → DotExpr(slot='speak', args=(LiteralExpr(42.0),))."""
+    expr = unwrap([
+        lparen(), tok(TokenType.DOT, "."), ident("obj"), ident("speak"),
+        num(42.0),
+        rparen(), eof(),
+    ])
+    assert isinstance(expr, DotExpr)
+    assert expr.slot == "speak"
+    assert len(expr.args) == 1
+
+
+def test_dot_expr_location():
+    """DotExpr.location은 여는 괄호 위치다."""
+    expr = unwrap([
+        lparen(line=5, col=3), tok(TokenType.DOT, "."), ident("obj"), ident("x"),
+        rparen(), eof(),
+    ])
+    assert isinstance(expr, DotExpr)
+    assert expr.location.line == 5
+    assert expr.location.column == 3
+
+
+# ============================================================
+# 30. SuperExpr — (super method args...)
+# ============================================================
+
+def test_super_expr_no_args():
+    """(super init) → SuperExpr(method='init', args=())."""
+    expr = unwrap([
+        lparen(), kw(TokenType.SUPER), ident("init"), rparen(), eof(),
+    ])
+    assert isinstance(expr, SuperExpr)
+    assert expr.method == "init"
+    assert expr.args == ()
+
+
+def test_super_expr_with_args():
+    """(super greet "hello") → SuperExpr with one arg."""
+    expr = unwrap([
+        lparen(), kw(TokenType.SUPER), ident("greet"), string("hello"), rparen(), eof(),
+    ])
+    assert isinstance(expr, SuperExpr)
+    assert expr.method == "greet"
+    assert len(expr.args) == 1
+    assert isinstance(expr.args[0], LiteralExpr)
+    assert expr.args[0].value == "hello"
+
+
+def test_super_expr_location():
+    """SuperExpr.location은 여는 괄호 위치다."""
+    expr = unwrap([
+        lparen(line=9, col=1), kw(TokenType.SUPER), ident("foo"), rparen(), eof(),
+    ])
+    assert isinstance(expr, SuperExpr)
+    assert expr.location.line == 9
+
+
+# ============================================================
+# 31. get-field / set-field!
+# ============================================================
+
+def test_get_field_expr():
+    """(get-field obj fieldName) → DotExpr(slot='fieldName', args=())."""
+    expr = unwrap([
+        lparen(), ident("get-field"), ident("obj"), ident("fieldName"), rparen(), eof(),
+    ])
+    assert isinstance(expr, DotExpr)
+    assert expr.slot == "fieldName"
+    assert expr.args == ()
+    assert isinstance(expr.obj, IdentifierExpr)
+    assert expr.obj.name == "obj"
+
+
+def test_set_field_expr():
+    """(set-field! obj fieldName 42) → DotExpr(slot='fieldName', args=(LiteralExpr(42.0),))."""
+    expr = unwrap([
+        lparen(), ident("set-field!"), ident("obj"), ident("fieldName"), num(42.0),
+        rparen(), eof(),
+    ])
+    assert isinstance(expr, DotExpr)
+    assert expr.slot == "fieldName"
+    assert len(expr.args) == 1
+    assert isinstance(expr.args[0], LiteralExpr)
+    assert expr.args[0].value == 42.0
+
+
+def test_set_field_expr_with_identifier_value():
+    """(set-field! obj x val) → DotExpr with IdentifierExpr arg."""
+    expr = unwrap([
+        lparen(), ident("set-field!"), ident("obj"), ident("x"), ident("val"),
+        rparen(), eof(),
+    ])
+    assert isinstance(expr, DotExpr)
+    assert isinstance(expr.args[0], IdentifierExpr)
+
+
+# ============================================================
+# 32. DOTIDENTIFIER
+# ============================================================
+
+def test_dotidentifier_atom_becomes_dotexpr():
+    """obj.field 단독 원자 → DotExpr(obj=IdentifierExpr('obj'), slot='field', args=())."""
+    expr = unwrap([dotident("obj.field"), eof()])
+    assert isinstance(expr, DotExpr)
+    assert isinstance(expr.obj, IdentifierExpr)
+    assert expr.obj.name == "obj"
+    assert expr.slot == "field"
+    assert expr.args == ()
+
+
+def test_dotidentifier_in_list_becomes_dotexpr():
+    """(obj.method arg) → DotExpr with one arg."""
+    expr = unwrap([
+        lparen(), dotident("obj.method"), num(5.0), rparen(), eof(),
+    ])
+    assert isinstance(expr, DotExpr)
+    assert expr.slot == "method"
+    assert len(expr.args) == 1
+
+
+def test_dotidentifier_super_prefix_becomes_superexpr():
+    """(Super.greet) → SuperExpr(method='greet', args=())."""
+    expr = unwrap([
+        lparen(), dotident("Super.greet"), rparen(), eof(),
+    ])
+    assert isinstance(expr, SuperExpr)
+    assert expr.method == "greet"
+    assert expr.args == ()
+
+
+def test_dotidentifier_super_with_args():
+    """(Super.init 10) → SuperExpr with one arg."""
+    expr = unwrap([
+        lparen(), dotident("Super.init"), num(10.0), rparen(), eof(),
+    ])
+    assert isinstance(expr, SuperExpr)
+    assert expr.method == "init"
+    assert len(expr.args) == 1
+
+
+# ============================================================
+# 33. Array expressions
+# ============================================================
+
+def test_array_expr_literal():
+    """[5] → ExpressionStmt(ArrayExpr(size=LiteralExpr(5.0)))."""
+    tokens = [lbracket(), num(5.0), rbracket(), eof()]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, ExpressionStmt)
+    expr = stmt.expression
+    assert isinstance(expr, ArrayExpr)
+    assert isinstance(expr.size, LiteralExpr)
+    assert expr.size.value == 5.0
+
+
+def test_array_expr_with_identifier_size():
+    """[n] → ArrayExpr(size=IdentifierExpr('n'))."""
+    tokens = [lbracket(), ident("n"), rbracket(), eof()]
+    prog = SExpressionAssembler(tokens).assemble()
+    expr = prog.statements[0].expression
+    assert isinstance(expr, ArrayExpr)
+    assert isinstance(expr.size, IdentifierExpr)
+    assert expr.size.name == "n"
+
+
+def test_array_index_expr():
+    """arr[0] → ExpressionStmt(ArrayIndexExpr(array=IdentifierExpr('arr'), index=LiteralExpr(0.0)))."""
+    tokens = [ident("arr"), lbracket(), num(0.0), rbracket(), eof()]
+    prog = SExpressionAssembler(tokens).assemble()
+    stmt = prog.statements[0]
+    assert isinstance(stmt, ExpressionStmt)
+    expr = stmt.expression
+    assert isinstance(expr, ArrayIndexExpr)
+    assert isinstance(expr.array, IdentifierExpr)
+    assert expr.array.name == "arr"
+    assert isinstance(expr.index, LiteralExpr)
+    assert expr.index.value == 0.0
+
+
+def test_array_double_index():
+    """arr[0][1] → nested ArrayIndexExpr."""
+    tokens = [
+        ident("arr"),
+        lbracket(), num(0.0), rbracket(),
+        lbracket(), num(1.0), rbracket(),
+        eof(),
+    ]
+    prog = SExpressionAssembler(tokens).assemble()
+    expr = prog.statements[0].expression
+    assert isinstance(expr, ArrayIndexExpr)
+    assert isinstance(expr.array, ArrayIndexExpr)
+    assert expr.index.value == 1.0
+    assert expr.array.index.value == 0.0
+
+
+def test_array_expr_location():
+    """ArrayExpr.location은 [ 토큰 위치다."""
+    tokens = [lbracket(line=2, col=4), num(3.0), rbracket(), eof()]
+    prog = SExpressionAssembler(tokens).assemble()
+    expr = prog.statements[0].expression
+    assert isinstance(expr, ArrayExpr)
+    assert expr.location.line == 2
+    assert expr.location.column == 4
+
+
+def test_array_index_expr_location():
+    """ArrayIndexExpr.location은 [ 토큰 위치다."""
+    tokens = [ident("arr"), lbracket(line=3, col=5), num(0.0), rbracket(), eof()]
+    prog = SExpressionAssembler(tokens).assemble()
+    expr = prog.statements[0].expression
+    assert isinstance(expr, ArrayIndexExpr)
+    assert expr.location.line == 3

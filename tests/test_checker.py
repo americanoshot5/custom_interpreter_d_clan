@@ -21,8 +21,12 @@ import pytest
 import unittest.mock as umock
 
 from common import (
+    ArrayExpr,
+    ArrayIndexExpr,
     BlockStmt,
     CheckError,
+    ClassStmt,
+    DotExpr,
     ExpressionStmt,
     ForStmt,
     FuncDefStmt,
@@ -31,12 +35,15 @@ from common import (
     ImportStmt,
     ListExpr,
     LiteralExpr,
+    MethodDef,
+    NewExpr,
     PrintStmt,
     Program,
     ReturnStmt,
     SetStmt,
     SourceLocation,
     Stmt,
+    SuperExpr,
     VarStmt,
 )
 from Checker import StaticChecker, check
@@ -1195,3 +1202,485 @@ class TestOptimize:
         optimized = optimize(program)
         execute(optimized)
         assert capsys.readouterr().out.strip() == "15.0"
+
+
+# ── helpers for OOP tests ────────────────────────────────────────────────────
+
+def make_method(name: str, params: tuple = (), *body_stmts, has_return: bool = False) -> MethodDef:
+    body = body_stmts if body_stmts else ()
+    return MethodDef(name=name, params=params, body=tuple(body))
+
+
+def class_stmt(name: str, parent: str | None = None, fields=(), methods=()) -> ClassStmt:
+    return ClassStmt(name=name, parent=parent, fields=tuple(fields), methods=tuple(methods))
+
+
+# ============================================================
+# 14. ClassStmt 검사
+# ============================================================
+
+class TestClassStmtChecking:
+
+    def test_simple_class_passes(self):
+        """기본 클래스 정의는 체크를 통과한다."""
+        program = prog(class_stmt("Dog"))
+        check(program)
+
+    def test_class_with_field_passes(self):
+        """필드가 있는 클래스 정의도 통과한다."""
+        program = prog(class_stmt("Box", fields=("x", "y")))
+        check(program)
+
+    def test_class_with_valid_parent_passes(self):
+        """부모 클래스가 존재하면 통과한다."""
+        program = prog(
+            class_stmt("Animal"),
+            class_stmt("Dog", parent="Animal"),
+        )
+        check(program)
+
+    def test_class_self_inheritance_raises(self):
+        """자기 자신 상속 → CheckError."""
+        program = prog(class_stmt("Dog", parent="Dog"))
+        with pytest.raises(CheckError, match="cannot inherit from itself"):
+            check(program)
+
+    def test_class_undefined_parent_raises(self):
+        """정의되지 않은 부모 클래스 → CheckError (undefined variable)."""
+        program = prog(class_stmt("Dog", parent="Animal"))
+        with pytest.raises(CheckError):
+            check(program)
+
+    def test_class_parent_not_a_class_raises(self):
+        """클래스가 아닌 이름을 부모로 사용 → CheckError."""
+        program = prog(
+            var("Animal", lit(42.0)),
+            class_stmt("Dog", parent="Animal"),
+        )
+        with pytest.raises(CheckError, match="not a class"):
+            check(program)
+
+    def test_class_method_with_return_value_passes(self):
+        """메서드 안 return 값은 허용된다."""
+        method = MethodDef(
+            name="getValue", params=(), body=(ReturnStmt(value=lit(1.0)),)
+        )
+        program = prog(class_stmt("Box", methods=[method]))
+        check(program)
+
+    def test_init_method_return_with_value_raises(self):
+        """init 메서드에서 return 값 사용 → CheckError."""
+        init_m = MethodDef(
+            name="init", params=(), body=(ReturnStmt(value=lit(1.0)),)
+        )
+        program = prog(class_stmt("Box", methods=[init_m]))
+        with pytest.raises(CheckError, match="init"):
+            check(program)
+
+    def test_class_method_uses_self(self):
+        """메서드 본문에서 self 참조는 허용된다."""
+        method = MethodDef(
+            name="test", params=(), body=(ExpressionStmt(IdentifierExpr("self")),)
+        )
+        program = prog(class_stmt("X", methods=[method]))
+        check(program)
+
+    def test_class_method_with_params(self):
+        """메서드 파라미터 참조는 허용된다."""
+        method = MethodDef(
+            name="add", params=("a", "b"),
+            body=(ExpressionStmt(IdentifierExpr("a")),),
+        )
+        program = prog(class_stmt("Calc", methods=[method]))
+        check(program)
+
+
+# ============================================================
+# 15. This / Super 검사
+# ============================================================
+
+class TestThisAndSuperChecking:
+
+    def test_this_inside_method_passes(self):
+        """메서드 안에서 This 사용 → 통과."""
+        method = MethodDef(
+            name="test", params=(), body=(ExpressionStmt(IdentifierExpr("This")),)
+        )
+        program = prog(class_stmt("X", methods=[method]))
+        check(program)
+
+    def test_this_outside_class_raises(self):
+        """클래스 밖에서 This 사용 → CheckError."""
+        program = prog(ExpressionStmt(IdentifierExpr("This")))
+        with pytest.raises(CheckError, match="This"):
+            check(program)
+
+    def test_super_inside_method_with_parent_passes(self):
+        """부모 있는 클래스 메서드 안에서 Super → 통과."""
+        super_expr = SuperExpr(method="init", args=())
+        method = MethodDef(
+            name="init", params=(), body=(ExpressionStmt(super_expr),)
+        )
+        program = prog(
+            class_stmt("Animal"),
+            class_stmt("Dog", parent="Animal", methods=[method]),
+        )
+        check(program)
+
+    def test_super_in_class_without_parent_raises(self):
+        """부모 없는 클래스 메서드에서 Super → CheckError."""
+        super_expr = SuperExpr(method="init", args=())
+        method = MethodDef(
+            name="init", params=(), body=(ExpressionStmt(super_expr),)
+        )
+        program = prog(class_stmt("Lone", methods=[method]))
+        with pytest.raises(CheckError, match="Super"):
+            check(program)
+
+    def test_super_outside_class_raises(self):
+        """클래스 밖에서 Super → CheckError."""
+        program = prog(ExpressionStmt(SuperExpr(method="foo", args=())))
+        with pytest.raises(CheckError, match="Super"):
+            check(program)
+
+
+# ============================================================
+# 16. OOP 표현식 검사 (NewExpr, DotExpr, ArrayExpr, ArrayIndexExpr)
+# ============================================================
+
+class TestOopExprChecking:
+
+    def test_new_expr_known_class_passes(self):
+        """정의된 클래스를 new로 생성 → 통과."""
+        program = prog(
+            class_stmt("Dog"),
+            ExpressionStmt(NewExpr(class_name="Dog", args=())),
+        )
+        check(program)
+
+    def test_new_expr_undefined_class_raises(self):
+        """정의되지 않은 클래스 new → CheckError."""
+        program = prog(ExpressionStmt(NewExpr(class_name="Unknown", args=())))
+        with pytest.raises(CheckError):
+            check(program)
+
+    def test_new_expr_with_args_checked(self):
+        """NewExpr 인수도 검사된다 (undefined var)."""
+        program = prog(
+            class_stmt("Box"),
+            ExpressionStmt(NewExpr(class_name="Box", args=(IdentifierExpr("undefined"),))),
+        )
+        with pytest.raises(CheckError):
+            check(program)
+
+    def test_dot_expr_passes(self):
+        """DotExpr obj와 args 검사 통과."""
+        program = prog(
+            class_stmt("Dog"),
+            var("d", NewExpr(class_name="Dog", args=())),
+            ExpressionStmt(DotExpr(obj=IdentifierExpr("d"), slot="name", args=())),
+        )
+        check(program)
+
+    def test_dot_expr_undefined_obj_raises(self):
+        """DotExpr의 obj가 미정의 → CheckError."""
+        program = prog(
+            ExpressionStmt(DotExpr(obj=IdentifierExpr("undefined"), slot="x", args=())),
+        )
+        with pytest.raises(CheckError):
+            check(program)
+
+    def test_array_expr_passes(self):
+        """ArrayExpr(size) 검사 통과."""
+        program = prog(
+            var("n", lit(5.0)),
+            ExpressionStmt(ArrayExpr(size=IdentifierExpr("n"))),
+        )
+        check(program)
+
+    def test_array_expr_undefined_size_raises(self):
+        """ArrayExpr의 size가 미정의 → CheckError."""
+        program = prog(ExpressionStmt(ArrayExpr(size=IdentifierExpr("undefined"))))
+        with pytest.raises(CheckError):
+            check(program)
+
+    def test_array_index_expr_passes(self):
+        """ArrayIndexExpr(array, index) 검사 통과."""
+        program = prog(
+            var("arr", lit(None)),
+            var("i", lit(0.0)),
+            ExpressionStmt(ArrayIndexExpr(
+                array=IdentifierExpr("arr"),
+                index=IdentifierExpr("i"),
+            )),
+        )
+        check(program)
+
+    def test_array_index_expr_undefined_raises(self):
+        """ArrayIndexExpr에서 미정의 변수 참조 → CheckError."""
+        program = prog(
+            ExpressionStmt(ArrayIndexExpr(
+                array=IdentifierExpr("notDefined"),
+                index=lit(0.0),
+            )),
+        )
+        with pytest.raises(CheckError):
+            check(program)
+
+
+# ============================================================
+# 17. StaticBinder — OOP 노드 바인딩
+# ============================================================
+
+class TestStaticBinderOOP:
+
+    def test_bind_funcdefstmt(self):
+        """FuncDefStmt 본문 변수 바인딩."""
+        x_ref = IdentifierExpr("x")
+        program = prog(
+            var("x", lit(1.0)),
+            FuncDefStmt(
+                name="f",
+                params=(),
+                body=ExpressionStmt(x_ref),
+            ),
+        )
+        bindings = StaticBinder().bind(program)
+        assert id(x_ref) in bindings
+
+    def test_bind_returnstmt(self):
+        """ReturnStmt 안의 식도 바인딩."""
+        x_ref = IdentifierExpr("x")
+        program = prog(
+            var("x", lit(10.0)),
+            FuncDefStmt(
+                name="f",
+                params=(),
+                body=ReturnStmt(value=x_ref),
+            ),
+        )
+        bindings = StaticBinder().bind(program)
+        assert id(x_ref) in bindings
+
+    def test_bind_classstmt(self):
+        """ClassStmt는 클래스 이름을 스코프에 추가한다."""
+        cls_ref = IdentifierExpr("Dog")
+        program = prog(
+            class_stmt("Dog"),
+            ExpressionStmt(cls_ref),
+        )
+        bindings = StaticBinder().bind(program)
+        assert id(cls_ref) in bindings
+
+    def test_bind_ifstmt(self):
+        """IfStmt 분기도 바인딩된다."""
+        x_ref = IdentifierExpr("x")
+        program = prog(
+            var("x", lit(1.0)),
+            IfStmt(
+                condition=lit(True),
+                then_branch=ExpressionStmt(x_ref),
+                else_branch=None,
+            ),
+        )
+        bindings = StaticBinder().bind(program)
+        assert id(x_ref) in bindings
+
+    def test_bind_ifstmt_else_branch(self):
+        """IfStmt else 분기도 바인딩된다."""
+        y_ref = IdentifierExpr("y")
+        program = prog(
+            var("y", lit(2.0)),
+            IfStmt(
+                condition=lit(False),
+                then_branch=ExpressionStmt(lit(0.0)),
+                else_branch=ExpressionStmt(y_ref),
+            ),
+        )
+        bindings = StaticBinder().bind(program)
+        assert id(y_ref) in bindings
+
+    def test_bind_new_expr(self):
+        """NewExpr 안 args도 바인딩된다."""
+        x_ref = IdentifierExpr("x")
+        program = prog(
+            class_stmt("Box"),
+            var("x", lit(1.0)),
+            ExpressionStmt(NewExpr(class_name="Box", args=(x_ref,))),
+        )
+        bindings = StaticBinder().bind(program)
+        assert id(x_ref) in bindings
+
+    def test_bind_dot_expr(self):
+        """DotExpr obj와 args 바인딩."""
+        obj_ref = IdentifierExpr("obj")
+        program = prog(
+            var("obj", lit(None)),
+            ExpressionStmt(DotExpr(obj=obj_ref, slot="x", args=())),
+        )
+        bindings = StaticBinder().bind(program)
+        assert id(obj_ref) in bindings
+
+    def test_bind_super_expr(self):
+        """SuperExpr args도 바인딩된다 (FuncDefStmt 본문 내부에서)."""
+        x_ref = IdentifierExpr("x")
+        program = prog(
+            var("x", lit(5.0)),
+            FuncDefStmt(
+                name="f", params=(),
+                body=ExpressionStmt(SuperExpr(method="init", args=(x_ref,))),
+            ),
+        )
+        bindings = StaticBinder().bind(program)
+        assert id(x_ref) in bindings
+
+
+# ============================================================
+# 18. ConstantFolder — 누락 경로 보완
+# ============================================================
+
+class TestConstantFolderMissingPaths:
+
+    def test_fold_setstmt(self):
+        """ConstantFolder가 SetStmt 안의 상수 표현식을 접는다."""
+        const_expr = ListExpr((IdentifierExpr("+"), LiteralExpr(3.0), LiteralExpr(4.0)))
+        program = prog(
+            var("x", lit(0.0)),
+            SetStmt(target="x", value=const_expr),
+        )
+        folded = ConstantFolder().fold(program)
+        set_node = folded.statements[1]
+        assert isinstance(set_node, SetStmt)
+        assert isinstance(set_node.value, LiteralExpr)
+        assert set_node.value.value == 7.0
+
+    def test_fold_blockstmt(self):
+        """ConstantFolder가 BlockStmt 안의 상수 표현식을 접는다."""
+        const_expr = ListExpr((IdentifierExpr("*"), LiteralExpr(6.0), LiteralExpr(7.0)))
+        program = prog(
+            BlockStmt((PrintStmt(const_expr),)),
+        )
+        folded = ConstantFolder().fold(program)
+        block = folded.statements[0]
+        assert isinstance(block, BlockStmt)
+        inner_print = block.statements[0]
+        assert isinstance(inner_print.expression, LiteralExpr)
+        assert inner_print.expression.value == pytest.approx(42.0)
+
+    def test_fold_returns_funcdefstmt_unchanged(self):
+        """FuncDefStmt는 ConstantFolder가 그대로 반환한다."""
+        func = FuncDefStmt(name="f", params=(), body=ExpressionStmt(lit(1.0)))
+        program = prog(func)
+        folded = ConstantFolder().fold(program)
+        assert folded.statements[0] is func
+
+    def test_fold_returns_classstmt_unchanged(self):
+        """ClassStmt는 ConstantFolder가 그대로 반환한다."""
+        cls = ClassStmt(name="X", parent=None, fields=(), methods=())
+        program = prog(cls)
+        folded = ConstantFolder().fold(program)
+        assert folded.statements[0] is cls
+
+    def test_try_fold_empty_list_returns_listexpr(self):
+        """빈 ListExpr는 그대로 ListExpr로 반환된다."""
+        empty_list = ListExpr(())
+        program = prog(ExpressionStmt(empty_list))
+        folded = ConstantFolder().fold(program)
+        expr = folded.statements[0].expression
+        assert isinstance(expr, ListExpr)
+        assert expr.elements == ()
+
+    def test_try_fold_non_identifier_head(self):
+        """ListExpr의 첫 원소가 IdentifierExpr가 아니면 그대로 반환."""
+        list_with_lit_head = ListExpr((LiteralExpr(1.0), LiteralExpr(2.0)))
+        program = prog(ExpressionStmt(list_with_lit_head))
+        folded = ConstantFolder().fold(program)
+        expr = folded.statements[0].expression
+        assert isinstance(expr, ListExpr)
+
+    def test_try_fold_unknown_op_returns_listexpr(self):
+        """알 수 없는 연산자는 상수 접기하지 않고 ListExpr 그대로 반환."""
+        unknown_op_list = ListExpr((IdentifierExpr("Array"), LiteralExpr(5.0)))
+        program = prog(ExpressionStmt(unknown_op_list))
+        folded = ConstantFolder().fold(program)
+        expr = folded.statements[0].expression
+        assert isinstance(expr, ListExpr)
+
+
+# ============================================================
+# 19. resolve_bindings — 누락 경로 보완
+# ============================================================
+
+class TestResolveBindingsMissingPaths:
+
+    def test_resolve_setstmt(self):
+        """SetStmt target도 BindingTable에 등록된다."""
+        table = resolve_bindings(prog(
+            var("x", lit(0.0)),
+            SetStmt(target="x", value=lit(1.0)),
+        ))
+        assert "x" in table._data
+
+    def test_resolve_blockstmt(self):
+        """BlockStmt 내부도 바인딩 분석된다."""
+        table = resolve_bindings(prog(
+            var("x", lit(0.0)),
+            BlockStmt((ExpressionStmt(IdentifierExpr("x")),)),
+        ))
+        assert "x" in table._data
+
+    def test_resolve_ifstmt(self):
+        """IfStmt 분기도 분석된다."""
+        table = resolve_bindings(prog(
+            var("x", lit(0.0)),
+            IfStmt(
+                condition=IdentifierExpr("x"),
+                then_branch=ExpressionStmt(IdentifierExpr("x")),
+                else_branch=ExpressionStmt(IdentifierExpr("x")),
+            ),
+        ))
+        assert "x" in table._data
+
+    def test_resolve_forstmt(self):
+        """ForStmt 내부도 분석된다."""
+        table = resolve_bindings(prog(
+            ForStmt(iterator="i", start=lit(0.0), end=lit(3.0),
+                    body=ExpressionStmt(IdentifierExpr("i"))),
+        ))
+        assert "i" in table._data
+
+    def test_resolve_funcdefstmt(self):
+        """FuncDefStmt도 분석된다."""
+        x_ref = IdentifierExpr("x")
+        table = resolve_bindings(prog(
+            var("x", lit(0.0)),
+            FuncDefStmt(name="f", params=(), body=ExpressionStmt(x_ref)),
+        ))
+        assert "f" in table._data or "x" in table._data
+
+    def test_resolve_returnstmt(self):
+        """ReturnStmt 내부 식도 분석된다."""
+        table = resolve_bindings(prog(
+            var("x", lit(1.0)),
+            FuncDefStmt(
+                name="f", params=(),
+                body=ReturnStmt(value=IdentifierExpr("x")),
+            ),
+        ))
+        assert "x" in table._data
+
+    def test_resolve_classstmt(self):
+        """ClassStmt는 클래스 이름을 스코프에 추가한다."""
+        table = resolve_bindings(prog(
+            ClassStmt(name="Dog", parent=None, fields=(), methods=()),
+            ExpressionStmt(IdentifierExpr("Dog")),
+        ))
+        assert "Dog" in table._data
+
+    def test_resolve_listexpr_in_collect_expr(self):
+        """_collect_expr에 ListExpr 전달 시 내부 원소도 분석된다."""
+        table = resolve_bindings(prog(
+            var("x", lit(1.0)),
+            PrintStmt(ListExpr((IdentifierExpr("+"), IdentifierExpr("x"), lit(2.0)))),
+        ))
+        assert "x" in table._data
