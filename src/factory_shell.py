@@ -4,6 +4,7 @@ import contextlib
 import io
 import sys
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 from Assembler import assemble
@@ -32,6 +33,105 @@ class FileModeExecutor(SExpressionExecutor):
             raise RuntimeExecutionError(line, error) from error
 
 
+class DebugCommand:
+    def execute(self, session: "DebugSession") -> bool:
+        raise NotImplementedError
+
+
+class StepDebugCommand(DebugCommand):
+    def execute(self, session: "DebugSession") -> bool:
+        session._step()
+        return True
+
+
+class ContinueDebugCommand(DebugCommand):
+    def execute(self, session: "DebugSession") -> bool:
+        session._continue()
+        return True
+
+
+class ListBreakpointsDebugCommand(DebugCommand):
+    def execute(self, session: "DebugSession") -> bool:
+        session._list_breakpoints()
+        return True
+
+
+class ListWatchesDebugCommand(DebugCommand):
+    def execute(self, session: "DebugSession") -> bool:
+        session._list_watches()
+        return True
+
+
+class InspectDebugCommand(DebugCommand):
+    def execute(self, session: "DebugSession") -> bool:
+        session._inspect_scope()
+        return True
+
+
+@dataclass(frozen=True)
+class AddBreakpointDebugCommand(DebugCommand):
+    command: str
+
+    def execute(self, session: "DebugSession") -> bool:
+        return session._add_breakpoint(self.command)
+
+
+@dataclass(frozen=True)
+class RemoveBreakpointDebugCommand(DebugCommand):
+    command: str
+
+    def execute(self, session: "DebugSession") -> bool:
+        return session._remove_breakpoint(self.command)
+
+
+@dataclass(frozen=True)
+class WatchDebugCommand(DebugCommand):
+    command: str
+
+    def execute(self, session: "DebugSession") -> bool:
+        return session._add_watch(self.command)
+
+
+@dataclass(frozen=True)
+class UnwatchDebugCommand(DebugCommand):
+    command: str
+
+    def execute(self, session: "DebugSession") -> bool:
+        return session._remove_watch(self.command)
+
+
+@dataclass(frozen=True)
+class UnknownDebugCommand(DebugCommand):
+    command: str
+
+    def execute(self, session: "DebugSession") -> bool:
+        session._write_output(f"Unknown debug command: {self.command}")
+        return False
+
+
+class DebugCommandParser:
+    def parse(self, command: str) -> DebugCommand:
+        if command in {"step", "next"}:
+            return StepDebugCommand()
+        if command == "continue":
+            return ContinueDebugCommand()
+        if command == "breakpoints":
+            return ListBreakpointsDebugCommand()
+        if command == "watches":
+            return ListWatchesDebugCommand()
+        if command == "inspect":
+            return InspectDebugCommand()
+        if command.startswith("break "):
+            return AddBreakpointDebugCommand(command)
+        if command.startswith("remove "):
+            return RemoveBreakpointDebugCommand(command)
+        if command == "watch" or command.startswith("watch "):
+            return WatchDebugCommand(command)
+        if command == "unwatch" or command.startswith("unwatch "):
+            return UnwatchDebugCommand(command)
+        return UnknownDebugCommand(command)
+
+
 class DebugSession:
     def __init__(
         self,
@@ -44,6 +144,7 @@ class DebugSession:
         self._cursor = 0
         self._breakpoints: set[int] = set()
         self._watches: list[str] = []
+        self._command_parser = DebugCommandParser()
 
     def run(self, commands: Sequence[str]) -> int:
         self._report_position()
@@ -58,31 +159,7 @@ class DebugSession:
         return 0
 
     def _handle_command(self, command: str) -> bool:
-        if command in {"step", "next"}:
-            self._step()
-            return True
-        if command == "continue":
-            self._continue()
-            return True
-        if command == "breakpoints":
-            self._list_breakpoints()
-            return True
-        if command == "watches":
-            self._list_watches()
-            return True
-        if command == "inspect":
-            self._inspect_scope()
-            return True
-        if command.startswith("break "):
-            return self._add_breakpoint(command)
-        if command.startswith("remove "):
-            return self._remove_breakpoint(command)
-        if command == "watch" or command.startswith("watch "):
-            return self._add_watch(command)
-        if command == "unwatch" or command.startswith("unwatch "):
-            return self._remove_watch(command)
-        self._write_output(f"Unknown debug command: {command}")
-        return False
+        return self._command_parser.parse(command).execute(self)
 
     def _add_breakpoint(self, command: str) -> bool:
         line = self._parse_line_arg(command, "break")

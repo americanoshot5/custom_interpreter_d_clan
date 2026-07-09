@@ -67,6 +67,37 @@ def test_debug_mode_steps_top_level_statements():
     assert any("finished" in line.lower() for line in outputs)
 
 
+def test_debug_command_parser_returns_command_objects():
+    parser = factory_shell.DebugCommandParser()
+
+    cases = [
+        ("step", factory_shell.StepDebugCommand),
+        ("next", factory_shell.StepDebugCommand),
+        ("continue", factory_shell.ContinueDebugCommand),
+        ("breakpoints", factory_shell.ListBreakpointsDebugCommand),
+        ("watches", factory_shell.ListWatchesDebugCommand),
+        ("inspect", factory_shell.InspectDebugCommand),
+        ("break 3", factory_shell.AddBreakpointDebugCommand),
+        ("remove 3", factory_shell.RemoveBreakpointDebugCommand),
+        ("watch total", factory_shell.WatchDebugCommand),
+        ("unwatch total", factory_shell.UnwatchDebugCommand),
+    ]
+
+    for text, command_type in cases:
+        command = parser.parse(text)
+
+        assert isinstance(command, command_type)
+        assert hasattr(command, "execute")
+
+
+def test_debug_command_parser_returns_unknown_command_object():
+    parser = factory_shell.DebugCommandParser()
+
+    command = parser.parse("rewind")
+
+    assert isinstance(command, factory_shell.UnknownDebugCommand)
+
+
 def test_debug_mode_reports_initial_stop_before_running_any_statement():
     outputs: list[str] = []
 
