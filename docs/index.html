@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>S-expression 인터프리터</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-nav" aria-label="presentation navigation">
+      <a href="#cover">Cover</a>
+      <a href="#roles">Roles</a>
+      <a href="#intro">Intro</a>
+      <a href="#demo">Demo</a>
+      <a href="#refactor">Practices</a>
+      <a href="#tdd">TDD</a>
+      <a href="#future">Review</a>
+    </header>
+
+    <main>
+      <section class="cover section" id="cover">
+        <div class="cover-copy">
+          <p class="eyebrow">CodeFab Interpreter Project</p>
+          <h1>S-expression 인터프리터</h1>
+          <div class="cover-meta" aria-label="team information">
+            <div>
+              <span>팀명</span>
+              <strong>D-clan</strong>
+            </div>
+            <div>
+              <span>조원</span>
+              <p>김일도님, 윤길중님, 여상훈님, 손지영님, 김상민님(조장)</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section roles-section" id="roles">
+        <div class="section-heading">
+          <p class="eyebrow">Team Roles</p>
+          <h2>조원별 역할</h2>
+        </div>
+        <div class="role-grid" aria-label="team member roles">
+          <article>
+            <strong>김일도님</strong>
+            <p>Tokenizer / 정적배열</p>
+          </article>
+          <article>
+            <strong>손지영님</strong>
+            <p>Assembler / Class 기능</p>
+          </article>
+          <article>
+            <strong>윤길중님</strong>
+            <p>Checker / 실행전 최적화</p>
+          </article>
+          <article>
+            <strong>여상훈님</strong>
+            <p>Executor / Function 기능</p>
+          </article>
+          <article>
+            <strong>김상민님</strong>
+            <p>통합테스트 / import 문 &amp; Prompt Shell</p>
+            <span>조장</span>
+          </article>
+        </div>
+      </section>
+
+      <section class="hero section" id="intro">
+        <div class="hero-copy">
+          <p class="eyebrow">Custom Interpreter Team Project</p>
+          <h1>S-expression 인터프리터</h1>
+          <div class="intro-points" aria-label="S-expression introduction">
+            <article>
+              <strong>S-expression이란?</strong>
+              <p>괄호로 감싼 리스트 구조로 코드와 데이터를 표현하는 표기법이다. Lisp 계열 언어에서 대표적으로 사용된다.</p>
+            </article>
+            <article>
+              <strong>Lisp 계열의 철학</strong>
+              <p>프로그램 자체도 리스트 데이터처럼 다룰 수 있다는 점이 핵심이다. 이 철학 덕분에 함수형 사고, 재귀, 메타프로그래밍, 언어 확장이 자연스럽게 이어진다.</p>
+            </article>
+            <article>
+              <strong>왜 이런 문법이 생겼나?</strong>
+              <p>1950년대 후반 John McCarthy가 인공지능 연구에서 기호와 리스트를 다루기 위해 Lisp를 설계하면서 등장했다. 사람이 읽기 쉬운 문법보다, 코드와 데이터를 같은 구조로 다룰 수 있는 단순한 표현력을 우선했다.</p>
+            </article>
+            <article>
+              <strong>어떤 특징인가?</strong>
+              <p>연산자와 피연산자가 같은 리스트 안에 놓여 문법 구조가 단순하다. 파싱 결과도 트리 형태로 자연스럽게 이어진다.</p>
+            </article>
+          </div>
+        </div>
+        <div class="code-stage" aria-label="S-expression code demo">
+          <div class="code-window">
+            <div class="window-bar">
+              <span></span>
+              <span></span>
+              <span></span>
+              <strong>prompt session</strong>
+            </div>
+            <pre><code>&gt;&gt;&gt; func fib (n)
+...   (if (&lt; n 2)
+...     (return n)
+...     (return (+ (fib (- n 1)) (fib (- n 2)))))
+...
+&gt;&gt;&gt; print (fib 10)
+55.0</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="section split" id="choice">
+        <div>
+          <p class="eyebrow">Team Decision</p>
+          <h2>언어 수정사항</h2>
+          <p>
+            S-expression은 모든 표현을 소괄호로 감싸주어야 한다.
+            우리는 REPL에서 더 자연스럽게 코드를 입력하도록, 바깥쪽 global 소괄호를 제거하기로 했다.
+          </p>
+        </div>
+        <div class="comparison">
+          <article class="snippet before">
+            <h3>Before</h3>
+            <pre><code><span class="global-paren">((</span>var total 0<span class="global-paren">)</span>
+<span class="global-paren">(</span>set! total (+ total 1)<span class="global-paren">)</span>
+<span class="global-paren">(</span>print total<span class="global-paren">))</span></code></pre>
+          </article>
+          <article class="snippet after">
+            <h3>After</h3>
+            <pre><code>var total 0
+set! total (+ total 1)
+print total</code></pre>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="demo">
+        <div class="section-heading">
+          <p class="eyebrow">Feature Demo</p>
+          <h2>기능 구현 소개</h2>
+          <p>데모 파일 1~4번을 실행하면 기초 문법, 함수, 클래스/모듈, 디버그 기능이 순서대로 검증된다.</p>
+        </div>
+        <div class="demo-pairs" aria-label="demo input and output pairs">
+          <article>
+            <div class="demo-title">
+              <h3>1. 기초 문법</h3>
+              <p>변수 선언/출력, 조건문, 반복문, 블록 스코프, 정적배열 생성·수정·조회</p>
+            </div>
+            <div class="io-pair">
+              <pre><code>(var score 82)
+(print "점수:")
+(print score)
+(if (&gt; score 90)
+  (print "학점: A")
+  (if (&gt; score 80)
+    (print "학점: B")
+    (print "학점: C")))
+
+(print "1부터 5까지 합계:")
+(var total 0)
+(for i 1 6
+  (set! total (+ total i)))
+(print total)
+
+(var x 100)
+{
+  (var x 999)
+  (print "블록 안쪽 x:")
+  (print x)
+}
+(print "블록 바깥 x:")
+(print x)
+
+(var scores [5])
+(set-index! scores 0 90)
+(set-index! scores 1 85)
+(set-index! scores 2 78)
+(set-index! scores 3 92)
+(set-index! scores 4 88)
+
+(var sum 0)
+(for i 0 5
+  (set! sum (+ sum scores[i])))
+(print (/ sum 5))</code></pre>
+              <pre><code>점수:
+82.0
+학점: B
+
+1부터 5까지 합계:
+15.0
+
+블록 스코프 확인 (바깥 x는 영향받지 않음):
+블록 안쪽 x:
+999.0
+블록 바깥 x:
+100.0
+
+배열: 점수 5개의 평균
+86.6</code></pre>
+            </div>
+          </article>
+          <article>
+            <h3>2. 함수 / 재귀 / 클로저</h3>
+            <div class="io-pair">
+              <pre><code>(func add (a b)
+  (return (+ a b)))
+(print (add 3 4))
+
+(func factorial (n)
+  (if (= n 0)
+    (return 1)
+    (return (* n (factorial (- n 1))))))
+(print (factorial 5))
+
+(func fib (n)
+  (if (&lt; n 2)
+    (return n)
+    (return (+ (fib (- n 1)) (fib (- n 2))))))
+(print (fib 10))
+
+(var base 10)
+(func addBase (x)
+  (return (+ base x)))
+(print (addBase 5))</code></pre>
+              <pre><code>3 + 4 =
+7.0
+
+팩토리얼 (재귀): 5! =
+120.0
+
+피보나치 (재귀): fib(10) =
+55.0
+
+클로저: 정의 시점의 base=10을 기억하는 함수
+15.0</code></pre>
+            </div>
+          </article>
+          <article>
+            <h3>3. 클래스 상속 + 모듈 import</h3>
+            <div class="io-pair">
+              <pre><code>demo/demo3_module_utils.cf
+(func square (n)
+  (return (* n n)))
+
+(func cube (n)
+  (return (* n (* n n))))
+
+demo/demo3_classes_and_modules.cf
+(class Animal {
+  (method init (name) {
+    (set-field! This name name)
+  })
+  (method speak () {
+    (return "...")
+  })
+  (method describe () {
+    (print (get-field This name))
+    (print (This.speak))
+  })
+})
+
+(class Dog : Animal {
+  (method speak () {
+    (return (+ (Super.speak) " Woof!"))
+  })
+})
+
+(var d (Dog "Rex"))
+(d.describe)
+
+(print (instanceof d Dog))
+(print (instanceof d Animal))
+
+(import "demo/demo3_module_utils.cf" alias util)
+(print (util.square 5))
+(print (util.cube 3))</code></pre>
+              <pre><code>Rex
+... Woof!
+
+instanceof 확인:
+True
+True
+
+5의 제곱:
+25.0
+3의 세제곱:
+27.0</code></pre>
+            </div>
+          </article>
+          <article>
+            <h3>4. 디버그 모드</h3>
+            <div class="io-pair">
+              <pre><code>(print "=== Demo 4: 디버깅 데모 ===")
+(var total 0)
+(var step1 10)
+(set! total (+ total step1))
+(var step2 20)
+(set! total (+ total step2))
+(var step3 30)
+(set! total (+ total step3))
+(print "합계:")
+(print total)</code></pre>
+              <pre><code>--- 디버그 명령 시퀀스 ---
+&gt; break 6
+&gt; watch total
+&gt; continue
+&gt; step
+&gt; step
+&gt; inspect
+&gt; continue
+--- 실행 로그 ---
+[debug] Stopped at line 1
+[debug] Breakpoint set at line 6
+[debug] Watch total: &lt;undefined&gt;
+[debug] === Demo 4: 디버깅 데모 ===
+[debug] Stopped at line 7
+[debug] Watch total: 30.0
+[debug] Stopped at line 8
+[debug] Watch total: 30.0
+[debug] Stopped at line 9
+[debug] Watch total: 60.0
+[debug] step1 = 10.0
+[debug] step2 = 20.0
+[debug] step3 = 30.0
+[debug] total = 60.0
+[debug] 합계:
+[debug] 60.0
+[debug] Program finished
+[debug] Watch total: 60.0</code></pre>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="refactor">
+        <div class="section-heading">
+          <p class="eyebrow">Best Practices</p>
+          <h2>Best Practices</h2>
+          <p>
+            기능을 완성하는 것만큼 중요했던 것은, 새 코드가 들어와도 이전
+            기능을 믿을 수 있고 문제를 빠르게 발견할 수 있는 협업 구조였다.
+          </p>
+        </div>
+
+        <div class="practice-grid">
+          <article class="practice-item">
+            <h3>1. 패턴 적용 범위와 리팩토링 의사결정</h3>
+            <p>
+              모든 패턴을 같은 깊이로 적용하지 않고, 문제의 범위에 맞는 구조를 선택했다.
+              적용한 패턴과 의도적으로 보류한 패턴을 함께 정리해 리팩토링 판단 기준을 남겼다.
+            </p>
+
+            <div class="pattern-scope-grid">
+              <article>
+                <strong>Pipeline</strong>
+                <span>프로젝트 최상위 흐름</span>
+                <p>Tokenizer → Assembler → Checker → Executor 단계로 책임을 분리했다.</p>
+              </article>
+              <article>
+                <strong>Interpreter</strong>
+                <span>AST 실행 모델</span>
+                <p>Stmt와 Expr를 실행 단위로 삼아 언어 문법을 런타임 동작으로 연결했다.</p>
+              </article>
+              <article>
+                <strong>Dispatch</strong>
+                <span>문법 확장 지점</span>
+                <p>Checker와 Executor 안의 타입별 분기를 테이블로 모아 변경 범위를 제한했다.</p>
+              </article>
+              <article>
+                <strong>Command</strong>
+                <span>Debug Shell 명령</span>
+                <p>debug 명령을 Command 객체로 분리해 명령 추가와 수정 범위를 줄였다.</p>
+              </article>
+              <article class="pattern-decision">
+                <strong>Visitor</strong>
+                <span>검토 후 미적용</span>
+                <p>AST 전체에 accept/visit 구조를 넣는 비용 대비 효과가 작아 보류했다.</p>
+              </article>
+            </div>
+
+            <div class="pattern-change-grid">
+              <article>
+                <h4>Interpreter: AST를 실행 단위로 관리</h4>
+                <div class="mini-comparison">
+                  <div>
+                    <strong>Before</strong>
+                    <pre><code># 문자열을 바로 실행하려는 구조
+run_line("(var x 1)")
+
+if tokens[0] == "var":
+    env[name] = eval(value)
+elif tokens[0] == "print":
+    print(eval(expr))</code></pre>
+                  </div>
+                  <div>
+                    <strong>After</strong>
+                    <pre><code># 문법을 AST 객체로 먼저 표현
+Program([
+  VarStmt("x", LiteralExpr(1)),
+  PrintStmt(IdentifierExpr("x")),
+])
+
+# 실행기는 AST를 해석만 담당
+executor.execute(program)</code></pre>
+                  </div>
+                </div>
+                <p class="change-impact">효과: 문법 구조를 AST로 고정하고, Checker/Executor가 같은 구조를 각자 목적에 맞게 해석할 수 있었다.</p>
+              </article>
+              <article>
+                <h4>Dispatch: 변경 영향도 축소</h4>
+                <div class="mini-comparison">
+                  <div>
+                    <strong>Before</strong>
+                    <pre><code>def execute(stmt):
+    if isinstance(stmt, VarStmt):
+        ...
+    elif isinstance(stmt, IfStmt):
+        ...
+    elif isinstance(stmt, WhileStmt):
+        ...  # 새 문법을 중간에 추가
+    elif isinstance(stmt, ForStmt):
+        ...</code></pre>
+                  </div>
+                  <div>
+                    <strong>After</strong>
+                    <pre><code>_STMT_DISPATCH = {
+    VarStmt: "_execute_varstmt",
+    IfStmt: "_execute_ifstmt",
+    ForStmt: "_execute_forstmt",
+    WhileStmt: "_execute_whilestmt",
+}
+
+def _execute_whilestmt(stmt):
+    ...</code></pre>
+                  </div>
+                </div>
+                <p class="change-impact">효과: 새 Stmt 추가 시 분기 함수 전체를 건드리는 대신, 모듈별 dispatch table 1줄과 전용 메서드로 변경 지점을 좁혔다.</p>
+              </article>
+              <article>
+                <h4>Command: debug 명령 분리</h4>
+                <div class="mini-comparison">
+                  <div>
+                    <strong>Before</strong>
+                    <pre><code>def _handle_command(text):
+    if text == "continue":
+        self._continue()
+    elif text == "inspect":
+        self._inspect_scope()
+    elif text.startswith("watch "):
+        self._add_watch(text)
+    ...</code></pre>
+                  </div>
+                  <div>
+                    <strong>After</strong>
+                    <pre><code># 1. 신규 명령 동작만 작성
+class RestartDebugCommand:
+    def execute(session):
+        ...
+
+# 2. 생성 담당 parser에 1줄 등록
+if text == "restart":
+    return RestartDebugCommand()</code></pre>
+                  </div>
+                </div>
+                <p class="change-impact">효과: 신규 명령은 자기 Command 클래스에 동작을 작성하고, 생성 담당 parser에 한 줄 등록하면 된다.</p>
+              </article>
+            </div>
+            <p class="impact">효과: 패턴을 많이 넣는 것보다, 변경이 자주 일어나는 지점에만 적용해 가독성과 확장성을 높였다.</p>
+          </article>
+
+          <article class="practice-item">
+            <h3>2. GitHub Actions로 회귀 테스트 강제</h3>
+            <p>
+              기능 개발이 끝날 때마다 해당 테스트를 회귀 테스트 목록에 넣고,
+              PR에서 pytest가 100% 통과하지 않으면 merge할 수 없도록 했다.
+            </p>
+            <p class="impact">효과: 신규 기능이 기존 기능을 깨뜨리는지 자동으로 확인했고, 리뷰어가 수동으로 전체 시나리오를 다시 실행하지 않아도 안정성을 판단할 수 있었다.</p>
+            <div class="evidence-strip" aria-label="GitHub Actions regression test evidence">
+              <figure>
+                <img src="assets/github-actions-runs.png" alt="GitHub Actions workflow runs passed for recent pull requests">
+                <figcaption>PR마다 자동 실행된 tests workflow</figcaption>
+              </figure>
+              <figure>
+                <img src="assets/github-actions-pytest.png" alt="GitHub Actions pytest job succeeded and collected 600 tests">
+                <figcaption>pytest job에서 600개 테스트 수집</figcaption>
+              </figure>
+            </div>
+          </article>
+
+          <article class="practice-item">
+            <h3>3. 기능 완성 후 사용자 관점 테스트</h3>
+            <p>
+              구현이 끝난 뒤 실제 사용 흐름으로 입력해보며 내부 테스트만으로는
+              드러나기 어려운 버그를 찾아냈다.
+            </p>
+            <div class="bug-case-grid">
+              <article class="bug-case">
+                <h4>선언 실패 후 재선언 오류</h4>
+                <p>문법 오류로 실패한 선언이 환경에 남아, 올바른 재선언까지 중복 변수로 처리되던 문제를 발견했다.</p>
+                <pre><code>(var y (10 + 1))  ; 실패
+(var y (+ 10 1))  ; y가 이미 정의됨</code></pre>
+                <a href="https://github.com/americanoshot5/custom_interpreter_d_clan/pull/39" target="_blank" rel="noreferrer">PR #39</a>
+              </article>
+              <article class="bug-case">
+                <h4>함수 정의 결과가 자동 출력</h4>
+                <p>REPL에서 함수 정의만 했는데 함수명이 결과처럼 출력되어, 실행 결과와 선언 결과가 섞여 보이던 문제를 수정했다.</p>
+                <pre><code>&gt;&gt;&gt; func xx (n) (print n)
+xx  ; 기존: 함수명이 자동 출력됨
+&gt;&gt;&gt; xx 20
+20.0</code></pre>
+                <a href="https://github.com/americanoshot5/custom_interpreter_d_clan/pull/41" target="_blank" rel="noreferrer">PR #41</a>
+              </article>
+              <article class="bug-case">
+                <h4>void 함수 조건식과 null 지원</h4>
+                <p>값을 반환하지 않는 함수를 if 조건에 넣어보며, null 값이 언어 차원에서 충분히 처리되지 않는 문제를 확인했다.</p>
+                <pre><code>(func logOnly ()
+  (print "check"))
+(if (logOnly)
+  (print "then")
+  (print "else"))</code></pre>
+                <a href="https://github.com/americanoshot5/custom_interpreter_d_clan/pull/42" target="_blank" rel="noreferrer">PR #42</a>
+              </article>
+            </div>
+            <p class="impact">사용자 테스트는 “실제로 쓰기 편한지”를 확인해주는 마지막 안전망이 되었다.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split" id="tdd">
+        <div>
+          <p class="eyebrow">Test Driven Collaboration</p>
+          <h2>테스트 분포</h2>
+          <p>
+            기능이 늘어나고 내부 구조가 바뀌어도, 테스트가 이전 동작을 계속
+            확인해주었다. 덕분에 새 기능을 붙이거나 리팩토링할 때 무엇이
+            깨졌는지 빠르게 알 수 있었고, 개발 속도와 안정성을 함께 얻을 수 있었다.
+          </p>
+          <ul class="plain-list">
+            <li>기능별 테스트로 기대 동작을 먼저 고정</li>
+            <li>변경 후 pytest로 기존 기능 회귀 여부 확인</li>
+            <li>통합 테스트로 실제 사용자 흐름까지 보호</li>
+            <li>리팩토링 후에도 같은 결과가 유지되는지 검증</li>
+          </ul>
+        </div>
+        <div class="test-panel">
+          <div class="test-groups">
+            <section>
+              <h4>모듈 테스트 506</h4>
+              <div class="summary-total module-total">
+                <strong>506</strong>
+                <span>Tokenizer / Assembler / Checker / Executor / Shell 단위 책임을 고정하는 테스트</span>
+              </div>
+            </section>
+            <section>
+              <h4>통합 테스트 96</h4>
+              <div class="summary-total integration-total">
+                <strong>96</strong>
+                <span>function / class / array / import / optimization / prompt shell / end-to-end</span>
+              </div>
+            </section>
+          </div>
+          <p class="metric">총 602개 pytest 수집 테스트</p>
+          <div class="quality-grid">
+            <article>
+              <strong>GitHub Actions</strong>
+              <p>기능 개발이 끝난 테스트는 바로 CI의 pytest 목록에 넣어 회귀 테스트로 고정했다.</p>
+            </article>
+            <article>
+              <strong>Coverage 95%+</strong>
+              <p>마지막에는 코드 커버리지까지 측정해 테스트 품질을 확인했고, 95% 이상으로 평가했다.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="future">
+        <div class="section-heading">
+          <p class="eyebrow">Retrospective</p>
+          <h2>소감</h2>
+        </div>
+        <div class="reflection-grid">
+          <article>
+            <h3>김일도님</h3>
+            <p>AI 도구가 프로젝트 이해, 리팩토링, 테스트 보강까지 도와줄 수 있다는 점이 인상적이었다. 현업에서도 오래된 코드를 개선하는 데 적극 활용해보고 싶다.</p>
+          </article>
+          <article>
+            <h3>손지영님</h3>
+            <p>이슈와 버그를 함께 해결하려는 분위기가 좋았다. 중간중간 리팩토링을 하니 구조 이해와 기능 추가가 쉬워졌고, 나중에 한 번에 고치는 것보다 비용이 적다는 것을 체감했다.</p>
+          </article>
+          <article>
+            <h3>윤길중님</h3>
+            <p>TDD와 GitHub 기반 협업 프로세스를 직접 경험한 의미 있는 시간이었다. AI 도구의 강력함도 확인했고, 보안 기준이 갖춰진다면 부서 DX에도 활용 가능성이 크다고 느꼈다.</p>
+          </article>
+          <article>
+            <h3>여상훈님</h3>
+            <p>GitHub로 함께 개발하니 같은 목표를 향해 움직인다는 느낌이 컸다. PR rule로 안정성을 확보할 수 있었고, AI 도구도 기대보다 편하고 강력했다.</p>
+          </article>
+          <article class="lead-reflection">
+            <h3>김상민님</h3>
+            <p>TDD가 매우 강력하다고 느꼈다. 사용 방식과 기대 동작을 먼저 정하고 개발하니 목표가 흔들리지 않았고, 진척률도 테스트 통과 여부로 자연스럽게 확인할 수 있었다.</p>
+          </article>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
