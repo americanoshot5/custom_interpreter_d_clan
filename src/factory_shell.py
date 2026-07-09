@@ -10,6 +10,7 @@ from Assembler import assemble
 from Checker import StaticChecker, check
 from common import ExecuteError, LanguageError, Program, RuntimeValue, Stmt
 from Executor import SExpressionExecutor
+from prompt_shell import wrap_bare_statement
 from Tokenizer import tokenize
 
 
@@ -327,7 +328,7 @@ def run_prompt_mode(
                 continue
 
         if line.strip() == "":
-            text = "\n".join(buffer)
+            text = wrap_bare_statement("\n".join(buffer), tokenize, assemble)
             try:
                 tokens = tokenize(text)
                 program = assemble(tokens)

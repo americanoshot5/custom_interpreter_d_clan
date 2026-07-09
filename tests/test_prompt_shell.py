@@ -1,4 +1,4 @@
-from prompt_shell import is_balanced, run_shell
+from prompt_shell import is_balanced, run_shell, wrap_bare_statement
 from common import TokenizeError
 
 
@@ -25,6 +25,76 @@ def test_is_balanced_basic_depth_counting():
 
 def test_is_balanced_ignores_parens_inside_string_literals():
     assert is_balanced('(print "(")') is True
+
+
+def test_wrap_bare_statement_wraps_simple_keyword_led_statement():
+    from Assembler import assemble
+    from Tokenizer import tokenize
+
+    assert wrap_bare_statement("var a 1", tokenize, assemble) == "(var a 1)"
+    assert wrap_bare_statement("print a", tokenize, assemble) == "(print a)"
+
+
+def test_wrap_bare_statement_leaves_already_parenthesized_text_unchanged():
+    from Assembler import assemble
+    from Tokenizer import tokenize
+
+    text = "(var a 1)"
+    assert wrap_bare_statement(text, tokenize, assemble) is text
+
+
+def test_wrap_bare_statement_leaves_bare_literal_unchanged():
+    from Assembler import assemble
+    from Tokenizer import tokenize
+
+    text = "42"
+    assert wrap_bare_statement(text, tokenize, assemble) is text
+
+
+def test_wrap_bare_statement_keeps_nested_expression_parens():
+    from Assembler import assemble
+    from Tokenizer import tokenize
+
+    assert wrap_bare_statement("var a (+ 1 2)", tokenize, assemble) == "(var a (+ 1 2))"
+
+
+def test_wrap_bare_statement_falls_back_when_result_is_ambiguous():
+    from Assembler import assemble
+    from Tokenizer import tokenize
+
+    text = "var a 1\nvar b 2"
+    assert wrap_bare_statement(text, tokenize, assemble) is text
+
+
+def test_wrap_bare_statement_falls_back_on_tokenize_error():
+    from Assembler import assemble
+
+    def failing_tokenize(_source):
+        raise TokenizeError("boom")
+
+    text = "var a $$$"
+    assert wrap_bare_statement(text, failing_tokenize, assemble) is text
+
+
+def test_bare_statement_without_parens_works_in_prompt_shell(capsys):
+    from Assembler import assemble
+    from Checker import StaticChecker
+    from Executor import SExpressionExecutor
+    from Tokenizer import tokenize
+
+    outputs = []
+    checker = StaticChecker()
+    executor = SExpressionExecutor()
+    run_shell(
+        read_line=_scripted_read_line(["var a 1", "", "print a", "", "exit"]),
+        write_output=outputs.append,
+        tokenize=tokenize,
+        assemble=assemble,
+        check=checker.check,
+        execute=executor.execute,
+    )
+    assert outputs == []
+    assert capsys.readouterr().out == "1.0\n"
 
 
 def test_exit_command_terminates_loop():
