@@ -28,6 +28,10 @@ body {
   line-height: 1.6;
 }
 
+main {
+  scroll-snap-type: y proximity;
+}
+
 .site-nav {
   position: fixed;
   top: 0;
@@ -58,6 +62,8 @@ body {
   display: grid;
   align-items: center;
   row-gap: 14px;
+  scroll-margin-top: 72px;
+  scroll-snap-align: start;
 }
 
 .cover {
