@@ -2,7 +2,7 @@ import pytest
 import unittest.mock as umock
 from common import *
 from Executor import *
-from Executor import Function
+from Executor import Function, ClassDef, ClassInstance, Environment, _ReturnSignal
 from Optimizer import (
     StaticBinder,
     fold_constants,
@@ -540,3 +540,534 @@ class TestOptimizerExecutorIntegration:
         info = table.lookup("x")
         assert isinstance(info, BindingInfo)
         assert info.distance == 0
+
+
+# ============================================================
+# OOP 실행 테스트
+# ============================================================
+
+def _make_method(name: str, params: tuple, *body_stmts) -> MethodDef:
+    return MethodDef(name=name, params=params, body=tuple(body_stmts))
+
+
+def _make_class(name: str, parent=None, fields=(), methods=()):
+    return ClassStmt(name=name, parent=parent, fields=fields, methods=tuple(methods))
+
+
+class TestClassDef:
+
+    def test_get_all_field_names_no_parent(self):
+        """부모 없는 ClassDef의 get_all_field_names는 자신의 필드만 반환."""
+        cls = ClassDef(name="Dog", parent=None, field_names=("name", "age"), methods={})
+        assert cls.get_all_field_names() == ["name", "age"]
+
+    def test_get_all_field_names_with_parent(self):
+        """부모 ClassDef의 필드가 자식 필드보다 먼저 나온다."""
+        parent = ClassDef(name="Animal", parent=None, field_names=("species",), methods={})
+        child = ClassDef(name="Dog", parent=parent, field_names=("name",), methods={})
+        all_fields = child.get_all_field_names()
+        assert all_fields == ["species", "name"]
+
+    def test_get_all_field_names_deduplicates(self):
+        """부모와 자식에 같은 필드 이름이 있으면 한 번만 등록된다."""
+        parent = ClassDef(name="A", parent=None, field_names=("x",), methods={})
+        child = ClassDef(name="B", parent=parent, field_names=("x", "y"), methods={})
+        assert child.get_all_field_names() == ["x", "y"]
+
+    def test_lookup_method_own(self):
+        """자신의 메서드를 찾아 반환한다."""
+        method = MethodDef(name="speak", params=(), body=())
+        cls = ClassDef(name="Dog", parent=None, field_names=(), methods={"speak": method})
+        result = cls.lookup_method("speak")
+        assert result is not None
+        found_method, defining_class = result
+        assert found_method is method
+        assert defining_class is cls
+
+    def test_lookup_method_from_parent(self):
+        """자신에게 없으면 부모 클래스에서 메서드를 찾는다."""
+        method = MethodDef(name="breathe", params=(), body=())
+        parent = ClassDef(name="Animal", parent=None, field_names=(), methods={"breathe": method})
+        child = ClassDef(name="Dog", parent=parent, field_names=(), methods={})
+        result = child.lookup_method("breathe")
+        assert result is not None
+        found_method, defining_class = result
+        assert found_method is method
+        assert defining_class is parent
+
+    def test_lookup_method_not_found_returns_none(self):
+        """정의되지 않은 메서드 조회는 None을 반환."""
+        cls = ClassDef(name="Dog", parent=None, field_names=(), methods={})
+        assert cls.lookup_method("fly") is None
+
+
+class TestClassInstance:
+
+    def test_repr(self):
+        """ClassInstance.__repr__는 '<ClassName instance>' 형태다."""
+        cls = ClassDef(name="Dog", parent=None, field_names=(), methods={})
+        instance = ClassInstance(class_def=cls)
+        assert repr(instance) == "<Dog instance>"
+
+
+class TestEnvironmentAssign:
+
+    def test_assign_existing_var(self):
+        """정의된 변수는 assign으로 값을 바꿀 수 있다."""
+        env = Environment()
+        env.define("x", 1)
+        env.assign("x", 42)
+        assert env.lookup("x") == 42
+
+    def test_assign_undefined_raises(self):
+        """미정의 변수에 assign하면 ExecuteError."""
+        env = Environment()
+        with pytest.raises(ExecuteError):
+            env.assign("undefined", 99)
+
+    def test_assign_in_parent_scope(self):
+        """자식 환경에서 부모 스코프 변수에 assign 가능."""
+        parent = Environment()
+        parent.define("x", 0)
+        child = Environment(parent=parent)
+        child.assign("x", 7)
+        assert parent.lookup("x") == 7
+
+
+class TestUnsupportedStmt:
+
+    def test_unsupported_stmt_type_raises(self):
+        """_STMT_DISPATCH에 없는 Stmt 타입은 ExecuteError."""
+        from dataclasses import dataclass
+        from common import Stmt
+
+        @dataclass(frozen=True, slots=True)
+        class _UnknownStmt(Stmt):
+            pass
+
+        program = Program((_UnknownStmt(),))
+        with pytest.raises(ExecuteError):
+            execute(program)
+
+
+class TestIfStmtNoElse:
+
+    def test_if_false_no_else_returns_none(self):
+        """조건이 False이고 else 없으면 None을 반환."""
+        program = Program((
+            IfStmt(
+                condition=LiteralExpr(False),
+                then_branch=PrintStmt(LiteralExpr(1.0)),
+                else_branch=None,
+            ),
+        ))
+        result = execute(program)
+        assert result is None
+
+
+class TestClassExecution:
+
+    def test_define_class_registers_in_env(self):
+        """ClassStmt 실행 후 환경에 ClassDef가 등록된다."""
+        stmt = _make_class("Dog", fields=("name",))
+        program = Program((stmt,))
+        ex = SExpressionExecutor()
+        ex.execute(program)
+        val = ex._environment.lookup("Dog")
+        assert isinstance(val, ClassDef)
+        assert val.name == "Dog"
+
+    def test_create_instance_via_new_expr(self):
+        """(new Dog) → ClassInstance."""
+        class_stmt = _make_class("Dog", fields=("name",))
+        new_expr_stmt = ExpressionStmt(NewExpr(class_name="Dog", args=()))
+        program = Program((class_stmt, new_expr_stmt))
+        result = execute(program)
+        assert isinstance(result, ClassInstance)
+        assert result.class_def.name == "Dog"
+
+    def test_create_instance_via_list_expr(self):
+        """(Dog) → creates ClassInstance (ClassDef callable via list_expr)."""
+        class_stmt = _make_class("Cat")
+        call_stmt = ExpressionStmt(
+            ListExpr((IdentifierExpr("Cat"),))
+        )
+        program = Program((class_stmt, call_stmt))
+        result = execute(program)
+        assert isinstance(result, ClassInstance)
+
+    def test_instance_has_init_fields(self):
+        """init 없는 클래스의 인스턴스는 필드가 None으로 초기화된다."""
+        class_stmt = _make_class("Box", fields=("width", "height"))
+        new_stmt = ExpressionStmt(NewExpr(class_name="Box", args=()))
+        program = Program((class_stmt, new_stmt))
+        result = execute(program)
+        assert isinstance(result, ClassInstance)
+        assert result.fields == {"width": None, "height": None}
+
+    def test_init_method_sets_fields(self):
+        """init 메서드로 필드를 설정한다."""
+        init_method = _make_method(
+            "init", ("val",),
+            ExpressionStmt(DotExpr(
+                obj=IdentifierExpr("self"),
+                slot="x",
+                args=(IdentifierExpr("val"),),
+            )),
+        )
+        class_stmt = _make_class("Box", fields=("x",), methods=[init_method])
+        new_stmt = ExpressionStmt(NewExpr(class_name="Box", args=(LiteralExpr(42.0),)))
+        program = Program((class_stmt, new_stmt))
+        result = execute(program)
+        assert isinstance(result, ClassInstance)
+        assert result.fields["x"] == 42.0
+
+    def test_call_method_via_dot_expr(self):
+        """(. obj speak) → 메서드 실행 후 반환값."""
+        get_method = _make_method(
+            "getValue", (),
+            ReturnStmt(value=LiteralExpr(99.0)),
+        )
+        class_stmt = _make_class("MyClass", methods=[get_method])
+        var_stmt = VarStmt(name="obj", initializer=NewExpr(class_name="MyClass", args=()))
+        call_stmt = ExpressionStmt(
+            DotExpr(obj=IdentifierExpr("obj"), slot="getValue", args=())
+        )
+        program = Program((class_stmt, var_stmt, call_stmt))
+        result = execute(program)
+        assert result == 99.0
+
+    def test_read_field_via_dot_expr(self):
+        """(. obj x) → 필드 값 읽기."""
+        set_method = _make_method(
+            "init", ("v",),
+            ExpressionStmt(DotExpr(
+                obj=IdentifierExpr("self"),
+                slot="x",
+                args=(IdentifierExpr("v"),),
+            )),
+        )
+        class_stmt = _make_class("P", fields=("x",), methods=[set_method])
+        var_stmt = VarStmt(name="p", initializer=NewExpr(class_name="P", args=(LiteralExpr(7.0),)))
+        read_stmt = ExpressionStmt(
+            DotExpr(obj=IdentifierExpr("p"), slot="x", args=())
+        )
+        program = Program((class_stmt, var_stmt, read_stmt))
+        result = execute(program)
+        assert result == 7.0
+
+    def test_write_field_via_dot_expr(self):
+        """(. obj x 100) → 필드 쓰기 후 값 반환."""
+        class_stmt = _make_class("Box", fields=("x",))
+        var_stmt = VarStmt(name="b", initializer=NewExpr(class_name="Box", args=()))
+        write_stmt = ExpressionStmt(
+            DotExpr(obj=IdentifierExpr("b"), slot="x", args=(LiteralExpr(100.0),))
+        )
+        program = Program((class_stmt, var_stmt, write_stmt))
+        result = execute(program)
+        assert result == 100.0
+
+    def test_dot_expr_on_non_instance_raises(self):
+        """인스턴스가 아닌 값에 dot_expr 적용 → ExecuteError."""
+        program = Program((
+            VarStmt(name="x", initializer=LiteralExpr(42.0)),
+            ExpressionStmt(DotExpr(obj=IdentifierExpr("x"), slot="foo", args=())),
+        ))
+        with pytest.raises(ExecuteError):
+            execute(program)
+
+    def test_new_expr_non_class_raises(self):
+        """NewExpr에 클래스가 아닌 값 → ExecuteError."""
+        program = Program((
+            VarStmt(name="x", initializer=LiteralExpr(42.0)),
+            ExpressionStmt(NewExpr(class_name="x", args=())),
+        ))
+        with pytest.raises(ExecuteError):
+            execute(program)
+
+    def test_create_instance_args_without_init_raises(self):
+        """init 없는 클래스에 인수 전달 → ExecuteError."""
+        class_stmt = _make_class("Empty")
+        new_stmt = ExpressionStmt(NewExpr(class_name="Empty", args=(LiteralExpr(1.0),)))
+        program = Program((class_stmt, new_stmt))
+        with pytest.raises(ExecuteError):
+            execute(program)
+
+    def test_read_undefined_field_raises(self):
+        """없는 필드 읽기 → ExecuteError."""
+        class_stmt = _make_class("X", fields=())
+        var_stmt = VarStmt(name="obj", initializer=NewExpr(class_name="X", args=()))
+        read_stmt = ExpressionStmt(
+            DotExpr(obj=IdentifierExpr("obj"), slot="noSuchField", args=())
+        )
+        program = Program((class_stmt, var_stmt, read_stmt))
+        with pytest.raises(ExecuteError):
+            execute(program)
+
+
+class TestInstanceOf:
+
+    def test_instanceof_same_class(self):
+        """instanceof: 같은 클래스 → True."""
+        class_stmt = _make_class("Dog")
+        var_stmt = VarStmt(name="d", initializer=NewExpr(class_name="Dog", args=()))
+        check_stmt = ExpressionStmt(ListExpr((
+            IdentifierExpr("instanceof"),
+            IdentifierExpr("d"),
+            IdentifierExpr("Dog"),
+        )))
+        program = Program((class_stmt, var_stmt, check_stmt))
+        result = execute(program)
+        assert result is True
+
+    def test_instanceof_different_class(self):
+        """instanceof: 다른 클래스 → False."""
+        dog_stmt = _make_class("Dog")
+        cat_stmt = _make_class("Cat")
+        var_stmt = VarStmt(name="d", initializer=NewExpr(class_name="Dog", args=()))
+        check_stmt = ExpressionStmt(ListExpr((
+            IdentifierExpr("instanceof"),
+            IdentifierExpr("d"),
+            IdentifierExpr("Cat"),
+        )))
+        program = Program((dog_stmt, cat_stmt, var_stmt, check_stmt))
+        result = execute(program)
+        assert result is False
+
+    def test_instanceof_parent_class(self):
+        """instanceof: 부모 클래스 → True."""
+        animal_stmt = _make_class("Animal")
+        dog_stmt = _make_class("Dog", parent="Animal")
+        var_stmt = VarStmt(name="d", initializer=NewExpr(class_name="Dog", args=()))
+        check_stmt = ExpressionStmt(ListExpr((
+            IdentifierExpr("instanceof"),
+            IdentifierExpr("d"),
+            IdentifierExpr("Animal"),
+        )))
+        program = Program((animal_stmt, dog_stmt, var_stmt, check_stmt))
+        result = execute(program)
+        assert result is True
+
+    def test_instanceof_non_instance(self):
+        """instanceof: 인스턴스가 아닌 값 → False."""
+        class_stmt = _make_class("Dog")
+        var_stmt = VarStmt(name="x", initializer=LiteralExpr(5.0))
+        check_stmt = ExpressionStmt(ListExpr((
+            IdentifierExpr("instanceof"),
+            IdentifierExpr("x"),
+            IdentifierExpr("Dog"),
+        )))
+        program = Program((class_stmt, var_stmt, check_stmt))
+        result = execute(program)
+        assert result is False
+
+    def test_instanceof_non_class_second_arg_raises(self):
+        """instanceof 두 번째 인수가 클래스가 아니면 ExecuteError."""
+        program = Program((
+            VarStmt(name="x", initializer=LiteralExpr(1.0)),
+            VarStmt(name="y", initializer=LiteralExpr(2.0)),
+            ExpressionStmt(ListExpr((
+                IdentifierExpr("instanceof"),
+                IdentifierExpr("x"),
+                IdentifierExpr("y"),
+            ))),
+        ))
+        with pytest.raises(ExecuteError):
+            execute(program)
+
+
+class TestSuperExpr:
+
+    def test_super_calls_parent_method(self):
+        """super.method는 부모 클래스 메서드를 호출한다."""
+        parent_method = _make_method(
+            "greet", (),
+            ReturnStmt(value=LiteralExpr("hello from Animal")),
+        )
+        animal_stmt = _make_class("Animal", methods=[parent_method])
+
+        dog_method = _make_method(
+            "greet", (),
+            ReturnStmt(value=SuperExpr(method="greet", args=())),
+        )
+        dog_stmt = _make_class("Dog", parent="Animal", methods=[dog_method])
+
+        var_stmt = VarStmt(name="d", initializer=NewExpr(class_name="Dog", args=()))
+        call_stmt = ExpressionStmt(
+            DotExpr(obj=IdentifierExpr("d"), slot="greet", args=())
+        )
+        program = Program((animal_stmt, dog_stmt, var_stmt, call_stmt))
+        result = execute(program)
+        assert result == "hello from Animal"
+
+    def test_super_outside_method_raises(self):
+        """super를 메서드 외부에서 사용하면 ExecuteError."""
+        program = Program((
+            ExpressionStmt(SuperExpr(method="greet", args=())),
+        ))
+        with pytest.raises(ExecuteError):
+            execute(program)
+
+    def test_super_no_parent_raises(self):
+        """부모 없는 클래스에서 super 사용 → ExecuteError."""
+        method = _make_method(
+            "test", (),
+            ReturnStmt(value=SuperExpr(method="test", args=())),
+        )
+        class_stmt = _make_class("Lone", methods=[method])
+        var_stmt = VarStmt(name="obj", initializer=NewExpr(class_name="Lone", args=()))
+        call_stmt = ExpressionStmt(
+            DotExpr(obj=IdentifierExpr("obj"), slot="test", args=())
+        )
+        program = Program((class_stmt, var_stmt, call_stmt))
+        with pytest.raises(ExecuteError):
+            execute(program)
+
+
+# ============================================================
+# 배열 실행 테스트
+# ============================================================
+
+class TestArrayExecution:
+
+    def test_array_expr_creates_list(self):
+        """ArrayExpr(size=3) → [None, None, None]."""
+        program = Program((ExpressionStmt(ArrayExpr(size=LiteralExpr(3.0))),))
+        result = execute(program)
+        assert isinstance(result, list)
+        assert result == [None, None, None]
+
+    def test_array_expr_float_size(self):
+        """부동소수 크기는 정수로 잘린다."""
+        program = Program((ExpressionStmt(ArrayExpr(size=LiteralExpr(2.9))),))
+        result = execute(program)
+        assert result == [None, None]
+
+    def test_array_expr_zero_size(self):
+        """크기 0 → 빈 리스트."""
+        program = Program((ExpressionStmt(ArrayExpr(size=LiteralExpr(0.0))),))
+        result = execute(program)
+        assert result == []
+
+    def test_array_expr_negative_size_raises(self):
+        """음수 크기 → ExecuteError."""
+        program = Program((ExpressionStmt(ArrayExpr(size=LiteralExpr(-1.0))),))
+        with pytest.raises(ExecuteError):
+            execute(program)
+
+    def test_array_expr_non_number_size_raises(self):
+        """문자열 크기 → ExecuteError."""
+        program = Program((ExpressionStmt(ArrayExpr(size=LiteralExpr("abc"))),))
+        with pytest.raises(ExecuteError):
+            execute(program)
+
+    def test_array_index_expr_read(self):
+        """ArrayIndexExpr로 배열 요소를 읽는다."""
+        arr_var = VarStmt(name="arr", initializer=ArrayExpr(size=LiteralExpr(3.0)))
+        read_stmt = ExpressionStmt(
+            ArrayIndexExpr(array=IdentifierExpr("arr"), index=LiteralExpr(0.0))
+        )
+        program = Program((arr_var, read_stmt))
+        result = execute(program)
+        assert result is None
+
+    def test_array_index_expr_out_of_bounds_raises(self):
+        """범위 밖 인덱스 → ExecuteError."""
+        arr_var = VarStmt(name="arr", initializer=ArrayExpr(size=LiteralExpr(3.0)))
+        read_stmt = ExpressionStmt(
+            ArrayIndexExpr(array=IdentifierExpr("arr"), index=LiteralExpr(10.0))
+        )
+        program = Program((arr_var, read_stmt))
+        with pytest.raises(ExecuteError):
+            execute(program)
+
+    def test_array_index_expr_non_array_raises(self):
+        """비배열에 인덱스 접근 → ExecuteError."""
+        program = Program((
+            VarStmt(name="x", initializer=LiteralExpr(42.0)),
+            ExpressionStmt(
+                ArrayIndexExpr(array=IdentifierExpr("x"), index=LiteralExpr(0.0))
+            ),
+        ))
+        with pytest.raises(ExecuteError):
+            execute(program)
+
+    def test_array_op_Array_creates_list(self):
+        """(Array 4) → [None]*4."""
+        program = Program((
+            ExpressionStmt(ListExpr((
+                IdentifierExpr("Array"), LiteralExpr(4.0)
+            ))),
+        ))
+        result = execute(program)
+        assert result == [None, None, None, None]
+
+    def test_array_op_index_reads(self):
+        """(index arr 1) → arr[1]."""
+        arr_var = VarStmt(name="arr", initializer=ArrayExpr(size=LiteralExpr(3.0)))
+        set_idx = ExpressionStmt(ListExpr((
+            IdentifierExpr("set-index!"),
+            IdentifierExpr("arr"),
+            LiteralExpr(1.0),
+            LiteralExpr(55.0),
+        )))
+        read = ExpressionStmt(ListExpr((
+            IdentifierExpr("index"),
+            IdentifierExpr("arr"),
+            LiteralExpr(1.0),
+        )))
+        program = Program((arr_var, set_idx, read))
+        result = execute(program)
+        assert result == 55.0
+
+    def test_array_op_set_index(self):
+        """(set-index! arr 2 99) → arr[2] == 99."""
+        arr_var = VarStmt(name="arr", initializer=ArrayExpr(size=LiteralExpr(3.0)))
+        set_stmt = ExpressionStmt(ListExpr((
+            IdentifierExpr("set-index!"),
+            IdentifierExpr("arr"),
+            LiteralExpr(2.0),
+            LiteralExpr(99.0),
+        )))
+        read_stmt = ExpressionStmt(ListExpr((
+            IdentifierExpr("index"),
+            IdentifierExpr("arr"),
+            LiteralExpr(2.0),
+        )))
+        program = Program((arr_var, set_stmt, read_stmt))
+        result = execute(program)
+        assert result == 99.0
+
+    def test_array_op_Array_wrong_args_raises(self):
+        """(Array 1 2) → ExecuteError: wrong arg count."""
+        program = Program((
+            ExpressionStmt(ListExpr((
+                IdentifierExpr("Array"), LiteralExpr(1.0), LiteralExpr(2.0)
+            ))),
+        ))
+        with pytest.raises(ExecuteError):
+            execute(program)
+
+    def test_array_op_index_wrong_args_raises(self):
+        """(index arr) → ExecuteError: wrong arg count."""
+        arr_var = VarStmt(name="arr", initializer=ArrayExpr(size=LiteralExpr(3.0)))
+        program = Program((
+            arr_var,
+            ExpressionStmt(ListExpr((
+                IdentifierExpr("index"), IdentifierExpr("arr")
+            ))),
+        ))
+        with pytest.raises(ExecuteError):
+            execute(program)
+
+    def test_array_op_set_index_wrong_args_raises(self):
+        """(set-index! arr 0) → ExecuteError: wrong arg count."""
+        arr_var = VarStmt(name="arr", initializer=ArrayExpr(size=LiteralExpr(3.0)))
+        program = Program((
+            arr_var,
+            ExpressionStmt(ListExpr((
+                IdentifierExpr("set-index!"), IdentifierExpr("arr"), LiteralExpr(0.0)
+            ))),
+        ))
+        with pytest.raises(ExecuteError):
+            execute(program)
