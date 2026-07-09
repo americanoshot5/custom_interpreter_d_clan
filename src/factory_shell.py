@@ -10,6 +10,7 @@ from Assembler import assemble
 from Checker import StaticChecker, check
 from common import ExecuteError, LanguageError, Program, RuntimeValue, Stmt
 from Executor import SExpressionExecutor
+from prompt_shell import wrap_bare_statement
 from Tokenizer import tokenize
 
 
@@ -303,12 +304,17 @@ def run_interactive_debug_mode(
 def run_prompt_mode(
     read_line: Callable[[], str],
     write_output: Callable[[str], None] = print,
+    on_prompt: Callable[[str], None] | None = None,
+    prompt: str = ">>> ",
+    continuation_prompt: str = "... ",
 ) -> int:
     checker = StaticChecker()
     executor = SExpressionExecutor()
     buffer: list[str] = []
 
     while True:
+        if on_prompt is not None:
+            on_prompt(continuation_prompt if buffer else prompt)
         try:
             line = read_line()
         except EOFError:
@@ -322,7 +328,7 @@ def run_prompt_mode(
                 continue
 
         if line.strip() == "":
-            text = "\n".join(buffer)
+            text = wrap_bare_statement("\n".join(buffer), tokenize, assemble)
             try:
                 tokens = tokenize(text)
                 program = assemble(tokens)
@@ -354,7 +360,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if mode == "debug" and len(rest) == 1:
         return run_interactive_debug_mode(rest[0])
     if mode == "prompt" and not rest:
-        return run_prompt_mode(read_line=lambda: input(">>> "), write_output=print)
+        def on_prompt(text: str) -> None:
+            print(text, end="", flush=True)
+
+        return run_prompt_mode(read_line=input, write_output=print, on_prompt=on_prompt)
     if mode not in {"run", "debug", "prompt"} and not rest:
         # 하위 호환: 서브커맨드 없이 파일 경로 하나만 주면 run 모드로 처리한다.
         return run_file_mode(mode)

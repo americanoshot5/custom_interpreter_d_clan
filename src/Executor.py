@@ -180,7 +180,7 @@ class SExpressionExecutor(Executor):
     def _execute_varstmt(self, stmt: VarStmt) -> Any | None:
         value = self._execute_expr(stmt.initializer) if stmt.initializer is not None else None
         self._environment.define(stmt.name, value)
-        return stmt.name
+        return None
 
     def _execute_setstmt(self, stmt: SetStmt) -> RuntimeValue:
         value = self._execute_expr(stmt.value)
