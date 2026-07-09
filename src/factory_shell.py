@@ -145,9 +145,12 @@ class DebugSession:
         self._breakpoints: set[int] = set()
         self._watches: list[str] = []
         self._command_parser = DebugCommandParser()
+        self._reported_initial = False
 
     def run(self, commands: Sequence[str]) -> int:
-        self._report_position()
+        if not self._reported_initial:
+            self._report_position()
+            self._reported_initial = True
         try:
             for command in commands:
                 if not self._handle_command(command.strip()):
