@@ -173,7 +173,7 @@ def test_session_state_persists_across_separate_submissions():
         prompt=">>> ",
         continuation_prompt="... ",
     )
-    assert outputs == ["x", "15.0"]
+    assert outputs == ["15.0"]
 
 
 def test_main_wires_run_shell_with_real_pipeline_functions(mocker):
