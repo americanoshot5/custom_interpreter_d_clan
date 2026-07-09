@@ -51,6 +51,22 @@ def test_tokenize_boolean_keywords():
     assert tokens[1].literal is False
 
 
+def test_tokenize_null_keyword():
+    src = SExpressionTokenizer("null")
+    tokens = src.tokenize()
+    assert tokens[0].type == TokenType.NULL
+    assert tokens[0].literal is None
+
+
+def test_tokenize_null_keyword_is_case_insensitive():
+    src = SExpressionTokenizer("Null NULL")
+    tokens = src.tokenize()
+    assert tokens[0].type == TokenType.NULL
+    assert tokens[0].literal is None
+    assert tokens[1].type == TokenType.NULL
+    assert tokens[1].literal is None
+
+
 def test_tokenize_invalid_character_raises():
     src = SExpressionTokenizer("@")
     with pytest.raises(TokenizeError):
