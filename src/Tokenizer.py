@@ -110,6 +110,8 @@ class SExpressionTokenizer(Tokenizer):
             literal = False
         if type == TokenType.TRUE:
             literal = True
+        if type == TokenType.NULL:
+            literal = None
         self.token.append(Token(type=type, lexeme=t, literal=literal, location=location))
 
 

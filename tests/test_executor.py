@@ -167,6 +167,25 @@ def test_execute_printstmt(capsys):
 
     assert captured.out == "3\n"
 
+def test_execute_null_literal_expression():
+    program = Program((ExpressionStmt(LiteralExpr(None)),))
+
+    calc = SExpressionExecutor()
+
+    assert calc.execute(program) is None
+
+
+def test_execute_varstmt_with_null_initializer():
+    program = Program(
+        (VarStmt(name='test', initializer=LiteralExpr(None)),)
+    )
+
+    calc = SExpressionExecutor()
+    calc.execute(program)
+
+    assert calc._environment.lookup('test') is None
+
+
 def test_execute_varstmt():
     program = Program(
         (VarStmt(name='test', initializer=ListExpr((IdentifierExpr("*"), LiteralExpr(2), LiteralExpr(3)))),)

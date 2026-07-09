@@ -327,3 +327,15 @@ def test_unary_minus_on_non_number_raises_execute_error():
     # 위와 동일한 이유로 현재는 TypeError 가 발생한다.
     with pytest.raises(ExecuteError):
         _run('(- "FabCoding")')
+
+
+def test_end_to_end_null_literal():
+    assert _run("null") is None
+
+
+def test_end_to_end_var_with_null_initializer_and_comparison():
+    assert _run("(var x null) (= x null)") is True
+
+
+def test_end_to_end_null_is_falsy_in_if():
+    assert _run('(if null (print "TRUE") (print "FALSE"))') is None
