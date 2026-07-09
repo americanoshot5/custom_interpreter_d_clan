@@ -4,12 +4,12 @@
 
 | 완료 | 추가 기능 | 설명 |
 |------|-----------|------|
-| <input type="checkbox" checked disabled> | Function | 함수 정의, 함수 호출, 재귀, return 처리 |
-| <input type="checkbox" checked disabled> | Class | 클래스 선언, 인스턴스 생성, 메서드, 상속, `Super` |
-| <input type="checkbox" checked disabled> | 정적배열 | 배열 생성, 인덱스 조회, 인덱스 값 변경 |
-| <input type="checkbox" checked disabled> | Import 문 | 외부 `.cf` 파일을 모듈 alias로 불러오기 |
-| <input type="checkbox" checked disabled> | 실행전 최적화 | 상수 접기와 최적화 통계 확인 |
-| <input type="checkbox" checked disabled> | 제어 쉘 제작 | Prompt mode, File mode, Debug mode, watch variable |
+| ☑ | Function | 함수 정의, 함수 호출, 재귀, return 처리 |
+| ☑ | Class | 클래스 선언, 인스턴스 생성, 메서드, 상속, `Super` |
+| ☑ | 정적배열 | 배열 생성, 인덱스 조회, 인덱스 값 변경 |
+| ☑ | Import 문 | 외부 `.cf` 파일을 모듈 alias로 불러오기 |
+| ☑ | 실행전 최적화 | 상수 접기와 최적화 통계 확인 |
+| ☑ | 제어 쉘 제작 | Prompt mode, File mode, Debug mode, watch variable |
 
 ---
 
