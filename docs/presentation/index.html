@@ -8,14 +8,63 @@
   </head>
   <body>
     <header class="site-nav" aria-label="presentation navigation">
+      <a href="#cover">Cover</a>
+      <a href="#roles">Roles</a>
       <a href="#intro">Intro</a>
       <a href="#demo">Demo</a>
-      <a href="#refactor">Refactor</a>
+      <a href="#refactor">Practices</a>
       <a href="#tdd">TDD</a>
-      <a href="#future">Next</a>
+      <a href="#future">Review</a>
     </header>
 
     <main>
+      <section class="cover section" id="cover">
+        <div class="cover-copy">
+          <p class="eyebrow">CodeFab Interpreter Project</p>
+          <h1>S-expression 인터프리터</h1>
+          <div class="cover-meta" aria-label="team information">
+            <div>
+              <span>팀명</span>
+              <strong>D-clan</strong>
+            </div>
+            <div>
+              <span>조원</span>
+              <p>김일도님, 윤길중님, 여상훈님, 손지영님, 김상민님(조장)</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section roles-section" id="roles">
+        <div class="section-heading">
+          <p class="eyebrow">Team Roles</p>
+          <h2>조원별 역할</h2>
+        </div>
+        <div class="role-grid" aria-label="team member roles">
+          <article>
+            <strong>김일도님</strong>
+            <p>Tokenizer / 정적배열</p>
+          </article>
+          <article>
+            <strong>손지영님</strong>
+            <p>Assembler / Class 기능</p>
+          </article>
+          <article>
+            <strong>윤길중님</strong>
+            <p>Checker / 실행전 최적화</p>
+          </article>
+          <article>
+            <strong>여상훈님</strong>
+            <p>Executor / Function 기능</p>
+          </article>
+          <article>
+            <strong>김상민님</strong>
+            <p>Test code 작성 / import 문 &amp; Prompt Shell</p>
+            <span>조장</span>
+          </article>
+        </div>
+      </section>
+
       <section class="hero section" id="intro">
         <div class="hero-copy">
           <p class="eyebrow">Custom Interpreter Team Project</p>
@@ -281,98 +330,53 @@ True
 
       <section class="section" id="refactor">
         <div class="section-heading">
-          <p class="eyebrow">Before &amp; After</p>
-          <h2>디자인 패턴 적용 사례</h2>
+          <p class="eyebrow">Best Practices</p>
+          <h2>Best Practices 사례</h2>
           <p>
-            패턴의 목적은 이름을 붙이는 것이 아니라 변경 영향 범위를 줄이는
-            것이다. 아래 세 사례는 기능 추가 시 수정 위치를 제한해 가독성과
-            확장성을 높인 리팩토링이다.
+            기능을 완성하는 것만큼 중요했던 것은, 새 코드가 들어와도 이전
+            기능을 믿을 수 있고 문제를 빠르게 발견할 수 있는 협업 구조였다.
           </p>
         </div>
 
-        <div class="refactor-grid">
-          <article class="refactor-item">
-            <h3>1. Pipeline 구조로 처리 단계 분리</h3>
+        <div class="practice-grid">
+          <article class="practice-item">
+            <h3>1. GitHub Actions로 회귀 테스트 강제</h3>
             <p>
-              소스 코드를 한 번에 실행하지 않고 Tokenizer, Assembler, Checker,
-              Optimizer, Executor가 순서대로 Program을 넘겨받는 구조로 나눴다.
-              단계별 책임이 분리되어 중간 처리 단계를 추가하기 쉬웠다.
+              기능 개발이 끝날 때마다 해당 테스트를 회귀 테스트 목록에 넣고,
+              PR에서 pytest가 100% 통과하지 않으면 merge할 수 없도록 했다.
             </p>
-            <div class="comparison compact">
-              <pre><code># Before
-def run(source):
-    tokens = tokenize(source)
-    program = assemble(tokens)
-    check(program)
-    execute(program)
-
-# 최적화 추가 시 실행 흐름마다
-# 중복 수정이 필요해지기 쉽다.</code></pre>
-              <pre><code># After
-tokens = tokenize(source)
-program = assemble(tokens)
-check(program)
-
-optimized = optimize(program)
-check(optimized)
-execute(optimized)</code></pre>
-            </div>
-            <p class="impact">변경 영향: optimizer가 새로 들어와도 앞단의 토큰화/조립 로직과 뒷단의 실행 로직을 직접 흔들지 않고, `Program -> Program` stage로 제한해서 붙일 수 있었다.</p>
+            <p class="impact">효과: 신규 기능이 기존 기능을 깨뜨리는지 자동으로 확인했고, 리뷰어가 수동으로 전체 시나리오를 다시 실행하지 않아도 안정성을 판단할 수 있었다.</p>
           </article>
 
-          <article class="refactor-item">
-            <h3>2. Dispatch Table로 문법 확장 비용 축소</h3>
+          <article class="practice-item">
+            <h3>2. 기능 완성 후 사용자 관점 테스트</h3>
             <p>
-              Assembler와 Executor에 분기문이 계속 늘어나던 구조를 테이블 기반
-              dispatch로 정리했다. 문법이나 Stmt가 추가될 때 등록 지점이 한 곳으로
-              모인다.
+              구현이 끝난 뒤 실제 사용 흐름으로 입력해보며 내부 테스트만으로는
+              드러나기 어려운 버그를 찾아냈다.
             </p>
-            <div class="comparison compact">
-              <pre><code># Before
-if token == "var": ...
-elif token == "print": ...
-elif token == "class": ...
-elif token == "import": ...</code></pre>
-              <pre><code># After
-_SPECIAL_FORMS = {
-  TokenType.VAR: "_parse_var_stmt",
-  TokenType.CLASS: "_parse_class_stmt",
-  TokenType.IMPORT: "_parse_import_stmt",
-}
-
-_STMT_DISPATCH = {
-  ClassStmt: "_execute_classstmt",
-  ImportStmt: "_execute_importstmt",
-}</code></pre>
-            </div>
-            <p class="impact">변경 영향: `class`, `import`, `return` 같은 문법을 추가할 때 긴 조건문을 수정하지 않고 테이블 등록과 전용 메서드 추가로 끝낼 수 있었다.</p>
+            <ul class="practice-list">
+              <li>선언 실패 후 재선언 시 이미 정의된 변수로 처리되던 문제</li>
+              <li>if 조건문에 void 함수를 넣으며 null 미구현을 발견한 사례</li>
+              <li>함수 정의 시 함수명이 자동 출력되던 문제</li>
+            </ul>
+            <p class="impact">효과: 테스트가 “정해진 API”를 지킨다면, 사용자 테스트는 “실제로 쓰기 편한지”를 확인해주는 마지막 안전망이 되었다.</p>
           </article>
 
-          <article class="refactor-item">
-            <h3>3. Template Method로 오류 보고 정책 확장</h3>
+          <article class="practice-item">
+            <h3>3. 패턴과 구조를 확장성 관점에서 점검</h3>
             <p>
-              기본 Executor의 실행 알고리즘은 유지하고, 파일 모드에서 필요한
-              줄 번호 기반 런타임 오류 보고만 하위 클래스에서 확장했다.
+              과제에서 제시된 처리 단계를 기반으로 Pipeline 구조와 Interpreter
+              구조를 자연스럽게 갖추었고, 추가 기능 구현 과정에서 Dispatch Table이
+              확장성을 높이는 핵심 장치가 되었다.
             </p>
-            <div class="comparison compact">
-              <pre><code># Before
-def execute(program):
-    for stmt in program.statements:
-        try:
-            execute_stmt(stmt)
-        except ExecuteError:
-            print("Runtime error")</code></pre>
-              <pre><code># After
-class FileModeExecutor(SExpressionExecutor):
-    def _execute_stmt(self, stmt):
-        try:
-            return super()._execute_stmt(stmt)
-        except ExecuteError as error:
-            raise RuntimeExecutionError(
-                stmt.location.line, error
-            )</code></pre>
+            <div class="pattern-summary">
+              <span><strong>Pipeline</strong> 처리 단계 분리</span>
+              <span><strong>Interpreter</strong> AST 실행 모델</span>
+              <span><strong>Dispatch</strong> 문법 확장 지점 정리</span>
+              <span><strong>Visitor</strong> AST 순회 리팩토링 후보</span>
+              <span><strong>Command</strong> debug 명령 리팩토링 후보</span>
             </div>
-            <p class="impact">변경 영향: 기본 실행기의 알고리즘은 유지하고 파일 모드의 오류 표시 정책만 확장해, 공통 실행 동작의 회귀 위험을 줄였다.</p>
+            <p class="impact">효과: 현재 구조의 강점과 다음 리팩토링 후보를 구분해, 발표 후에도 개선 방향을 설명할 수 있게 되었다.</p>
           </article>
         </div>
       </section>
@@ -427,21 +431,29 @@ class FileModeExecutor(SExpressionExecutor):
 
       <section class="section" id="future">
         <div class="section-heading">
-          <p class="eyebrow">What We Learned</p>
-          <h2>현업에 가져갈 수 있는 배움</h2>
+          <p class="eyebrow">Retrospective</p>
+          <h2>소감</h2>
         </div>
-        <div class="lesson-grid">
+        <div class="reflection-grid">
           <article>
-            <h3>인터페이스를 먼저 정한다</h3>
-            <p>함수 이름, 입력, 출력, 실패 조건이 먼저 정해지면 각자 구현해도 합류 지점이 흔들리지 않는다.</p>
+            <h3>김일도님</h3>
+            <p>AI 도구가 프로젝트 이해, 리팩토링, 테스트 보강까지 도와줄 수 있다는 점이 인상적이었다. 현업에서도 오래된 코드를 개선하는 데 적극 활용해보고 싶다.</p>
           </article>
           <article>
-            <h3>작은 PR은 리뷰 품질을 올린다</h3>
-            <p>stacked PR로 기능 단위를 작게 유지하니 리뷰어가 맥락을 잃지 않고 피드백할 수 있었다.</p>
+            <h3>손지영님</h3>
+            <p>이슈와 버그를 함께 해결하려는 분위기가 좋았다. 중간중간 리팩토링을 하니 구조 이해와 기능 추가가 쉬워졌고, 나중에 한 번에 고치는 것보다 비용이 적다는 것을 체감했다.</p>
           </article>
           <article>
-            <h3>리팩토링은 협업 비용을 줄인다</h3>
-            <p>캡슐화와 책임 분리는 단순 미화가 아니라 다음 변경을 더 예측 가능하게 만드는 투자였다.</p>
+            <h3>윤길중님</h3>
+            <p>TDD와 GitHub 기반 협업 프로세스를 직접 경험한 의미 있는 시간이었다. AI 도구의 강력함도 확인했고, 보안 기준이 갖춰진다면 부서 DX에도 활용 가능성이 크다고 느꼈다.</p>
+          </article>
+          <article>
+            <h3>여상훈님</h3>
+            <p>GitHub로 함께 개발하니 같은 목표를 향해 움직인다는 느낌이 컸다. PR rule로 안정성을 확보할 수 있었고, AI 도구도 기대보다 편하고 강력했다.</p>
+          </article>
+          <article class="lead-reflection">
+            <h3>김상민님(조장)</h3>
+            <p>TDD가 매우 강력하다고 느꼈다. 사용 방식과 기대 동작을 먼저 정하고 개발하니 목표가 흔들리지 않았고, 진척률도 테스트 통과 여부로 자연스럽게 확인할 수 있었다.</p>
           </article>
         </div>
       </section>
