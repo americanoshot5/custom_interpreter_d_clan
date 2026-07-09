@@ -365,6 +365,16 @@ True
               PR에서 pytest가 100% 통과하지 않으면 merge할 수 없도록 했다.
             </p>
             <p class="impact">효과: 신규 기능이 기존 기능을 깨뜨리는지 자동으로 확인했고, 리뷰어가 수동으로 전체 시나리오를 다시 실행하지 않아도 안정성을 판단할 수 있었다.</p>
+            <div class="evidence-strip" aria-label="GitHub Actions regression test evidence">
+              <figure>
+                <img src="assets/github-actions-runs.png" alt="GitHub Actions workflow runs passed for recent pull requests">
+                <figcaption>PR마다 자동 실행된 tests workflow</figcaption>
+              </figure>
+              <figure>
+                <img src="assets/github-actions-pytest.png" alt="GitHub Actions pytest job succeeded and collected 600 tests">
+                <figcaption>pytest job에서 600개 테스트 수집</figcaption>
+              </figure>
+            </div>
           </article>
 
           <article class="practice-item">
@@ -400,7 +410,6 @@ True
           </ul>
         </div>
         <div class="test-panel">
-          <h3>회귀 테스트 분포</h3>
           <div class="test-groups">
             <section>
               <h4>모듈 테스트 504</h4>
