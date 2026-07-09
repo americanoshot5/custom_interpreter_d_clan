@@ -222,7 +222,7 @@ class SExpressionExecutor(Executor):
     def _execute_funcdefstmt(self, stmt: FuncDefStmt) -> RuntimeValue:
         func = Function(params=stmt.params, body=stmt.body, closure=self._environment)
         self._environment.define(stmt.name, func)
-        return stmt.name
+        return None
 
     def _execute_returnstmt(self, stmt: ReturnStmt) -> RuntimeValue:
         value = self._execute_expr(stmt.value) if stmt.value is not None else None
