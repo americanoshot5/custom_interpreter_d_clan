@@ -537,6 +537,49 @@ code {
   font-weight: 800;
 }
 
+.bug-case-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.bug-case {
+  padding: 16px;
+  background: #f8faf9;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.bug-case h4 {
+  margin-bottom: 8px;
+  font-size: 18px;
+}
+
+.bug-case p {
+  margin-bottom: 12px;
+  font-size: 15px;
+}
+
+.bug-case pre {
+  min-height: 116px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.bug-case a {
+  display: inline-block;
+  color: var(--teal);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.bug-case a:hover {
+  text-decoration: underline;
+}
+
 .pattern-summary {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -759,6 +802,7 @@ code {
   .demo-flow,
   .role-grid,
   .lesson-grid,
+  .bug-case-grid,
   .evidence-strip,
   .quality-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -786,6 +830,7 @@ code {
   .lesson-grid,
   .reflection-grid,
   .io-pair,
+  .bug-case-grid,
   .evidence-strip,
   .quality-grid {
     grid-template-columns: 1fr;
