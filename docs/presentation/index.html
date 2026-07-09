@@ -26,12 +26,16 @@
               <p>괄호로 감싼 리스트 구조로 코드와 데이터를 표현하는 표기법이다. Lisp 계열 언어에서 대표적으로 사용된다.</p>
             </article>
             <article>
-              <strong>어떤 특징인가?</strong>
-              <p>연산자와 피연산자가 같은 리스트 안에 놓여 문법 구조가 단순하다. 파싱 결과도 트리 형태로 자연스럽게 이어진다.</p>
+              <strong>Lisp 계열의 철학</strong>
+              <p>프로그램 자체도 리스트 데이터처럼 다룰 수 있다는 점이 핵심이다. 이 철학 덕분에 함수형 사고, 재귀, 메타프로그래밍, 언어 확장이 자연스럽게 이어진다.</p>
             </article>
             <article>
-              <strong>왜 만들었나?</strong>
-              <p>언어 처리의 핵심 단계인 토큰화, 조립, 검사, 실행을 직접 구현해보기 위해 개발했다. 우리는 그 위에 테스트와 리팩토링을 얹어 협업 가능한 코드로 다듬었다.</p>
+              <strong>왜 이런 문법이 생겼나?</strong>
+              <p>1950년대 후반 John McCarthy가 인공지능 연구에서 기호와 리스트를 다루기 위해 Lisp를 설계하면서 등장했다. 사람이 읽기 쉬운 문법보다, 코드와 데이터를 같은 구조로 다룰 수 있는 단순한 표현력을 우선했다.</p>
+            </article>
+            <article>
+              <strong>어떤 특징인가?</strong>
+              <p>연산자와 피연산자가 같은 리스트 안에 놓여 문법 구조가 단순하다. 파싱 결과도 트리 형태로 자연스럽게 이어진다.</p>
             </article>
           </div>
         </div>
@@ -43,15 +47,13 @@
               <span></span>
               <strong>prompt session</strong>
             </div>
-            <pre><code>&gt;&gt;&gt; var total 0
-... 
-&gt;&gt;&gt; set! total (+ total 3)
-... 
-&gt;&gt;&gt; print total
-3.0
-
-debug&gt; watch total
-Watch total: 3.0</code></pre>
+            <pre><code>&gt;&gt;&gt; func fib (n)
+...   (if (&lt; n 2)
+...     (return n)
+...     (return (+ (fib (- n 1)) (fib (- n 2)))))
+...
+&gt;&gt;&gt; print (fib 10)
+55.0</code></pre>
           </div>
         </div>
       </section>
@@ -59,7 +61,7 @@ Watch total: 3.0</code></pre>
       <section class="section split" id="choice">
         <div>
           <p class="eyebrow">Team Decision</p>
-          <h2>우리 팀의 언어 사용성 선택</h2>
+          <h2>언어 수정사항</h2>
           <p>
             S-expression은 공통 과제의 기반이었지만, 사용자 입력 경험은 팀에서
             다시 판단했다. 우리는 바깥쪽 global 소괄호를 제거해 REPL에서 더
@@ -84,55 +86,194 @@ print total</code></pre>
 
       <section class="section" id="demo">
         <div class="section-heading">
-          <p class="eyebrow">Reliability First</p>
-          <h2>입력과 결과를 함께 보여준다</h2>
-          <p>
-            발표 중 전체 데모를 직접 실행하기 어렵다면, 사용자가 입력하는 코드와
-            인터프리터가 돌려주는 결과를 나란히 보여주는 방식이 가장 선명하다.
-          </p>
+          <p class="eyebrow">Feature Demo</p>
+          <h2>구현 기능이 실제 입력에서 동작한다</h2>
+          <p>데모 파일 1~4번을 실행하면 기초 문법, 함수, 클래스/모듈, 디버그 기능이 순서대로 검증된다.</p>
         </div>
         <div class="demo-pairs" aria-label="demo input and output pairs">
           <article>
-            <h3>Prompt mode</h3>
+            <h3>1. 기초 문법</h3>
             <div class="io-pair">
-              <pre><code>&gt;&gt;&gt; var total 0
+              <pre><code>(var score 82)
+(print "점수:")
+(print score)
+(if (&gt; score 90)
+  (print "학점: A")
+  (if (&gt; score 80)
+    (print "학점: B")
+    (print "학점: C")))
 
-&gt;&gt;&gt; set! total (+ total 3)
-
-&gt;&gt;&gt; print total</code></pre>
-              <pre><code>3.0</code></pre>
-            </div>
-          </article>
-          <article>
-            <h3>File mode</h3>
-            <div class="io-pair">
-              <pre><code>(func add2 (x) {
-  (return (+ x 2))
-})
-(var result (add2 5))
-(print result)</code></pre>
-              <pre><code>7.0</code></pre>
-            </div>
-          </article>
-          <article>
-            <h3>Debug watch</h3>
-            <div class="io-pair">
-              <pre><code>(var total 0)
-(set! total (+ total 3))
+(print "1부터 5까지 합계:")
+(var total 0)
+(for i 1 6
+  (set! total (+ total i)))
 (print total)
 
-debug&gt; watch total
-debug&gt; step
-debug&gt; step
-debug&gt; step</code></pre>
-              <pre><code>Stopped at line 1
-Watch total: &lt;undefined&gt;
-Stopped at line 2
-Watch total: 0.0
-Stopped at line 3
-Watch total: 3.0
-3.0
-Program finished</code></pre>
+(var x 100)
+{
+  (var x 999)
+  (print "블록 안쪽 x:")
+  (print x)
+}
+(print "블록 바깥 x:")
+(print x)
+
+(var scores [5])
+(set-index! scores 0 90)
+(set-index! scores 1 85)
+(set-index! scores 2 78)
+(set-index! scores 3 92)
+(set-index! scores 4 88)
+
+(var sum 0)
+(for i 0 5
+  (set! sum (+ sum scores[i])))
+(print (/ sum 5))</code></pre>
+              <pre><code>점수:
+82.0
+학점: B
+
+1부터 5까지 합계:
+15.0
+
+블록 스코프 확인 (바깥 x는 영향받지 않음):
+블록 안쪽 x:
+999.0
+블록 바깥 x:
+100.0
+
+배열: 점수 5개의 평균
+86.6</code></pre>
+            </div>
+          </article>
+          <article>
+            <h3>2. 함수 / 재귀 / 클로저</h3>
+            <div class="io-pair">
+              <pre><code>(func add (a b)
+  (return (+ a b)))
+(print (add 3 4))
+
+(func factorial (n)
+  (if (= n 0)
+    (return 1)
+    (return (* n (factorial (- n 1))))))
+(print (factorial 5))
+
+(func fib (n)
+  (if (&lt; n 2)
+    (return n)
+    (return (+ (fib (- n 1)) (fib (- n 2))))))
+(print (fib 10))
+
+(var base 10)
+(func addBase (x)
+  (return (+ base x)))
+(print (addBase 5))</code></pre>
+              <pre><code>3 + 4 =
+7.0
+
+팩토리얼 (재귀): 5! =
+120.0
+
+피보나치 (재귀): fib(10) =
+55.0
+
+클로저: 정의 시점의 base=10을 기억하는 함수
+15.0</code></pre>
+            </div>
+          </article>
+          <article>
+            <h3>3. 클래스 상속 + 모듈 import</h3>
+            <div class="io-pair">
+              <pre><code>demo/demo3_module_utils.cf
+(func square (n)
+  (return (* n n)))
+
+(func cube (n)
+  (return (* n (* n n))))
+
+demo/demo3_classes_and_modules.cf
+(class Animal {
+  (method init (name) {
+    (set-field! This name name)
+  })
+  (method speak () {
+    (return "...")
+  })
+  (method describe () {
+    (print (get-field This name))
+    (print (This.speak))
+  })
+})
+
+(class Dog : Animal {
+  (method speak () {
+    (return (+ (Super.speak) " Woof!"))
+  })
+})
+
+(var d (Dog "Rex"))
+(d.describe)
+
+(print (instanceof d Dog))
+(print (instanceof d Animal))
+
+(import "demo/demo3_module_utils.cf" alias util)
+(print (util.square 5))
+(print (util.cube 3))</code></pre>
+              <pre><code>Rex
+... Woof!
+
+instanceof 확인:
+True
+True
+
+5의 제곱:
+25.0
+3의 세제곱:
+27.0</code></pre>
+            </div>
+          </article>
+          <article>
+            <h3>4. 디버그 모드</h3>
+            <div class="io-pair">
+              <pre><code>(print "=== Demo 4: 디버깅 데모 ===")
+(var total 0)
+(var step1 10)
+(set! total (+ total step1))
+(var step2 20)
+(set! total (+ total step2))
+(var step3 30)
+(set! total (+ total step3))
+(print "합계:")
+(print total)</code></pre>
+              <pre><code>--- 디버그 명령 시퀀스 ---
+&gt; break 6
+&gt; watch total
+&gt; continue
+&gt; step
+&gt; step
+&gt; inspect
+&gt; continue
+--- 실행 로그 ---
+[debug] Stopped at line 1
+[debug] Breakpoint set at line 6
+[debug] Watch total: &lt;undefined&gt;
+[debug] === Demo 4: 디버깅 데모 ===
+[debug] Stopped at line 7
+[debug] Watch total: 30.0
+[debug] Stopped at line 8
+[debug] Watch total: 30.0
+[debug] Stopped at line 9
+[debug] Watch total: 60.0
+[debug] step1 = 10.0
+[debug] step2 = 20.0
+[debug] step3 = 30.0
+[debug] total = 60.0
+[debug] 합계:
+[debug] 60.0
+[debug] Program finished
+[debug] Watch total: 60.0</code></pre>
             </div>
           </article>
         </div>
@@ -141,35 +282,42 @@ Program finished</code></pre>
       <section class="section" id="refactor">
         <div class="section-heading">
           <p class="eyebrow">Before &amp; After</p>
-          <h2>디자인 패턴으로 확장 지점을 만들었다</h2>
+          <h2>디자인 패턴 적용 사례</h2>
           <p>
-            리팩토링의 핵심은 단순 정리가 아니라 새 기능을 어디에 추가할지
-            예측 가능하게 만드는 것이었다. 발표에서는 패턴이 코드 품질을 올린
-            대표 사례 세 가지만 보여준다.
+            패턴의 목적은 이름을 붙이는 것이 아니라 변경 영향 범위를 줄이는
+            것이다. 아래 세 사례는 기능 추가 시 수정 위치를 제한해 가독성과
+            확장성을 높인 리팩토링이다.
           </p>
         </div>
 
         <div class="refactor-grid">
           <article class="refactor-item">
-            <h3>1. Factory Method 관점의 실행 모드 분리</h3>
+            <h3>1. Pipeline 구조로 처리 단계 분리</h3>
             <p>
-              프롬프트, 파일, 디버그 실행을 한 흐름에 섞지 않고 mode별 생성
-              함수로 분리했다. 새 실행 모드가 생겨도 기존 모드의 입출력 흐름을
-              건드리지 않아도 된다.
+              소스 코드를 한 번에 실행하지 않고 Tokenizer, Assembler, Checker,
+              Optimizer, Executor가 순서대로 Program을 넘겨받는 구조로 나눴다.
+              단계별 책임이 분리되어 중간 처리 단계를 추가하기 쉬웠다.
             </p>
             <div class="comparison compact">
               <pre><code># Before
-if mode == "prompt":
-    ...
-elif mode == "run":
-    ...
-elif mode == "debug":
-    ...</code></pre>
+def run(source):
+    tokens = tokenize(source)
+    program = assemble(tokens)
+    check(program)
+    execute(program)
+
+# 최적화 추가 시 실행 흐름마다
+# 중복 수정이 필요해지기 쉽다.</code></pre>
               <pre><code># After
-run_prompt_mode(...)
-run_file_mode(path)
-run_debug_mode(source, commands)</code></pre>
+tokens = tokenize(source)
+program = assemble(tokens)
+check(program)
+
+optimized = optimize(program)
+check(optimized)
+execute(optimized)</code></pre>
             </div>
+            <p class="impact">변경 영향: optimizer가 새로 들어와도 앞단의 토큰화/조립 로직과 뒷단의 실행 로직을 직접 흔들지 않고, `Program -> Program` stage로 제한해서 붙일 수 있었다.</p>
           </article>
 
           <article class="refactor-item">
@@ -197,6 +345,7 @@ _STMT_DISPATCH = {
   ImportStmt: "_execute_importstmt",
 }</code></pre>
             </div>
+            <p class="impact">변경 영향: `class`, `import`, `return` 같은 문법을 추가할 때 긴 조건문을 수정하지 않고 테이블 등록과 전용 메서드 추가로 끝낼 수 있었다.</p>
           </article>
 
           <article class="refactor-item">
@@ -223,6 +372,7 @@ class FileModeExecutor(SExpressionExecutor):
                 stmt.location.line, error
             )</code></pre>
             </div>
+            <p class="impact">변경 영향: 기본 실행기의 알고리즘은 유지하고 파일 모드의 오류 표시 정책만 확장해, 공통 실행 동작의 회귀 위험을 줄였다.</p>
           </article>
         </div>
       </section>
@@ -245,35 +395,21 @@ class FileModeExecutor(SExpressionExecutor):
         </div>
         <div class="test-panel">
           <h3>회귀 테스트 분포</h3>
-          <div class="bar-row">
-            <span>Checker</span>
-            <div class="bar"><i style="width: 31%"></i></div>
-            <strong>181</strong>
-          </div>
-          <div class="bar-row">
-            <span>Assembler</span>
-            <div class="bar"><i style="width: 24%"></i></div>
-            <strong>144</strong>
-          </div>
-          <div class="bar-row">
-            <span>Executor</span>
-            <div class="bar"><i style="width: 16%"></i></div>
-            <strong>93</strong>
-          </div>
-          <div class="bar-row">
-            <span>Integration</span>
-            <div class="bar"><i style="width: 16%"></i></div>
-            <strong>93</strong>
-          </div>
-          <div class="bar-row">
-            <span>Shell</span>
-            <div class="bar"><i style="width: 9%"></i></div>
-            <strong>53</strong>
-          </div>
-          <div class="bar-row">
-            <span>Tokenizer</span>
-            <div class="bar"><i style="width: 5%"></i></div>
-            <strong>28</strong>
+          <div class="test-groups">
+            <section>
+              <h4>모듈 테스트 499</h4>
+              <div class="summary-total module-total">
+                <strong>499</strong>
+                <span>Tokenizer / Assembler / Checker / Executor / Shell 단위 책임을 고정하는 테스트</span>
+              </div>
+            </section>
+            <section>
+              <h4>통합 테스트 93</h4>
+              <div class="summary-total integration-total">
+                <strong>93</strong>
+                <span>function / class / array / import / optimization / prompt shell / end-to-end</span>
+              </div>
+            </section>
           </div>
           <p class="metric">총 592개 pytest 수집 테스트</p>
           <div class="quality-grid">
