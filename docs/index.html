@@ -342,20 +342,128 @@ True
 
         <div class="practice-grid">
           <article class="practice-item">
-            <h3>1. 패턴과 구조를 확장성 관점에서 점검</h3>
+            <h3>1. 패턴 적용 범위와 리팩토링 의사결정</h3>
             <p>
-              과제에서 제시된 처리 단계를 기반으로 Pipeline 구조와 Interpreter
-              구조를 자연스럽게 갖추었고, 추가 기능 구현 과정에서 Dispatch Table이
-              확장성을 높이는 핵심 장치가 되었다.
+              모든 패턴을 같은 깊이로 적용하지 않고, 문제의 범위에 맞는 구조를 선택했다.
+              적용한 패턴과 의도적으로 보류한 패턴을 함께 정리해 리팩토링 판단 기준을 남겼다.
             </p>
-            <div class="pattern-summary">
-              <span><strong>Pipeline</strong> 처리 단계 분리</span>
-              <span><strong>Interpreter</strong> AST 실행 모델</span>
-              <span><strong>Dispatch</strong> 문법 확장 지점 정리</span>
-              <span><strong>Visitor</strong> AST 순회 리팩토링 후보</span>
-              <span><strong>Command</strong> debug 명령 리팩토링 후보</span>
+
+            <div class="pattern-scope-grid">
+              <article>
+                <strong>Pipeline</strong>
+                <span>프로젝트 최상위 흐름</span>
+                <p>Tokenizer → Assembler → Checker → Executor 단계로 책임을 분리했다.</p>
+              </article>
+              <article>
+                <strong>Interpreter</strong>
+                <span>AST 실행 모델</span>
+                <p>Stmt와 Expr를 실행 단위로 삼아 언어 문법을 런타임 동작으로 연결했다.</p>
+              </article>
+              <article>
+                <strong>Dispatch</strong>
+                <span>문법 확장 지점</span>
+                <p>Checker와 Executor 안의 타입별 분기를 테이블로 모아 변경 범위를 제한했다.</p>
+              </article>
+              <article>
+                <strong>Command</strong>
+                <span>Debug Shell 명령</span>
+                <p>debug 명령을 Command 객체로 분리해 명령 추가와 수정 범위를 줄였다.</p>
+              </article>
+              <article class="pattern-decision">
+                <strong>Visitor</strong>
+                <span>검토 후 미적용</span>
+                <p>AST 전체에 accept/visit 구조를 넣는 비용 대비 효과가 작아 보류했다.</p>
+              </article>
             </div>
-            <p class="impact">효과: 현재 구조의 강점과 다음 리팩토링 후보를 구분해, 발표 후에도 개선 방향을 설명할 수 있게 되었다.</p>
+
+            <div class="pattern-change-grid">
+              <article>
+                <h4>Interpreter: AST를 실행 단위로 관리</h4>
+                <div class="mini-comparison">
+                  <div>
+                    <strong>Before</strong>
+                    <pre><code># 문자열을 바로 실행하려는 구조
+run_line("(var x 1)")
+
+if tokens[0] == "var":
+    env[name] = eval(value)
+elif tokens[0] == "print":
+    print(eval(expr))</code></pre>
+                  </div>
+                  <div>
+                    <strong>After</strong>
+                    <pre><code># 문법을 AST 객체로 먼저 표현
+Program([
+  VarStmt("x", LiteralExpr(1)),
+  PrintStmt(IdentifierExpr("x")),
+])
+
+# 실행기는 AST를 해석만 담당
+executor.execute(program)</code></pre>
+                  </div>
+                </div>
+                <p class="change-impact">효과: 문법 구조를 AST로 고정하고, Checker/Executor가 같은 구조를 각자 목적에 맞게 해석할 수 있었다.</p>
+              </article>
+              <article>
+                <h4>Dispatch: 변경 영향도 축소</h4>
+                <div class="mini-comparison">
+                  <div>
+                    <strong>Before</strong>
+                    <pre><code>def execute(stmt):
+    if isinstance(stmt, VarStmt):
+        ...
+    elif isinstance(stmt, IfStmt):
+        ...
+    elif isinstance(stmt, WhileStmt):
+        ...  # 새 문법을 중간에 추가
+    elif isinstance(stmt, ForStmt):
+        ...</code></pre>
+                  </div>
+                  <div>
+                    <strong>After</strong>
+                    <pre><code>_STMT_DISPATCH = {
+    VarStmt: "_execute_varstmt",
+    IfStmt: "_execute_ifstmt",
+    ForStmt: "_execute_forstmt",
+    WhileStmt: "_execute_whilestmt",
+}
+
+def _execute_whilestmt(stmt):
+    ...</code></pre>
+                  </div>
+                </div>
+                <p class="change-impact">효과: 새 Stmt 추가 시 분기 함수 전체를 건드리는 대신, 모듈별 dispatch table 1줄과 전용 메서드로 변경 지점을 좁혔다.</p>
+              </article>
+              <article>
+                <h4>Command: debug 명령 분리</h4>
+                <div class="mini-comparison">
+                  <div>
+                    <strong>Before</strong>
+                    <pre><code>def _handle_command(text):
+    if text == "continue":
+        self._continue()
+    elif text == "inspect":
+        self._inspect_scope()
+    elif text.startswith("watch "):
+        self._add_watch(text)
+    ...</code></pre>
+                  </div>
+                  <div>
+                    <strong>After</strong>
+                    <pre><code># 1. 신규 명령 동작만 작성
+class RestartDebugCommand:
+    def execute(session):
+        ...
+
+# 2. 생성 담당 parser에 1줄 등록
+if text == "restart":
+    return RestartDebugCommand()</code></pre>
+                  </div>
+                </div>
+                <p class="change-impact">효과: 신규 명령은 자기 Command 클래스에 동작을 작성하고, 생성 담당 parser에 한 줄 등록하면 된다.</p>
+              </article>
+            </div>
+            <p class="impact">효과: 패턴을 많이 넣는 것보다, 변경이 자주 일어나는 지점에만 적용해 가독성과 확장성을 높였다.</p>
           </article>
 
           <article class="practice-item">
@@ -435,9 +543,9 @@ True
         <div class="test-panel">
           <div class="test-groups">
             <section>
-              <h4>모듈 테스트 504</h4>
+              <h4>모듈 테스트 506</h4>
               <div class="summary-total module-total">
-                <strong>504</strong>
+                <strong>506</strong>
                 <span>Tokenizer / Assembler / Checker / Executor / Shell 단위 책임을 고정하는 테스트</span>
               </div>
             </section>
@@ -449,7 +557,7 @@ True
               </div>
             </section>
           </div>
-          <p class="metric">총 600개 pytest 수집 테스트</p>
+          <p class="metric">총 602개 pytest 수집 테스트</p>
           <div class="quality-grid">
             <article>
               <strong>GitHub Actions</strong>

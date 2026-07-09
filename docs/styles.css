@@ -481,11 +481,28 @@ code {
 
 .practice-grid {
   display: grid;
-  gap: 14px;
+  gap: 22px;
 }
 
 .practice-item {
+  position: relative;
   padding: 22px;
+  border-left: 7px solid var(--teal);
+  box-shadow: 0 14px 32px rgba(24, 34, 43, 0.08);
+}
+
+.practice-item:nth-child(1) {
+  background: #f3f8f6;
+}
+
+.practice-item:nth-child(2) {
+  background: #f7f8fb;
+  border-left-color: var(--navy);
+}
+
+.practice-item:nth-child(3) {
+  background: #fff7f4;
+  border-left-color: var(--coral);
 }
 
 .practice-item h3 {
@@ -578,6 +595,100 @@ code {
 
 .bug-case a:hover {
   text-decoration: underline;
+}
+
+.pattern-scope-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.pattern-scope-grid article {
+  min-height: 138px;
+  padding: 14px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.pattern-scope-grid strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.pattern-scope-grid span {
+  display: inline-block;
+  margin-bottom: 10px;
+  padding: 3px 8px;
+  background: #edf1ef;
+  border-radius: 999px;
+  color: var(--teal);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.pattern-scope-grid p {
+  margin-bottom: 0;
+  font-size: 14px;
+}
+
+.pattern-scope-grid .pattern-decision {
+  background: #fff7f4;
+  border-color: rgba(198, 88, 59, 0.36);
+}
+
+.pattern-scope-grid .pattern-decision span {
+  background: #ffe1d8;
+  color: #9a3b27;
+}
+
+.pattern-change-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.pattern-change-grid > article {
+  padding: 16px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.pattern-change-grid h4 {
+  margin-bottom: 12px;
+  font-size: 18px;
+}
+
+.mini-comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mini-comparison strong {
+  display: inline-block;
+  margin-bottom: 6px;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.mini-comparison pre {
+  min-height: 150px;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.change-impact {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 14px;
 }
 
 .pattern-summary {
@@ -802,6 +913,8 @@ code {
   .demo-flow,
   .role-grid,
   .lesson-grid,
+  .pattern-scope-grid,
+  .pattern-change-grid,
   .bug-case-grid,
   .evidence-strip,
   .quality-grid {
@@ -830,6 +943,9 @@ code {
   .lesson-grid,
   .reflection-grid,
   .io-pair,
+  .pattern-scope-grid,
+  .pattern-change-grid,
+  .mini-comparison,
   .bug-case-grid,
   .evidence-strip,
   .quality-grid {
