@@ -415,6 +415,31 @@ def test_run_prompt_mode_reports_language_errors():
     assert any("Error:" in line for line in outputs)
 
 
+def test_run_prompt_mode_accepts_bare_statement_without_outer_parens(capsys):
+    outputs: list[str] = []
+
+    exit_code = factory_shell.run_prompt_mode(
+        read_line=iter(["var a 1", "", "print a", "", "exit"]).__next__,
+        write_output=outputs.append,
+    )
+
+    assert exit_code == 0
+    assert capsys.readouterr().out == "1.0\n"
+
+
+def test_run_prompt_mode_shows_continuation_prompt_while_buffering():
+    prompts: list[str] = []
+
+    exit_code = factory_shell.run_prompt_mode(
+        read_line=iter(["(var x", "10)", "", "exit"]).__next__,
+        write_output=lambda line: None,
+        on_prompt=prompts.append,
+    )
+
+    assert exit_code == 0
+    assert prompts == [">>> ", "... ", "... ", ">>> "]
+
+
 def test_main_run_subcommand_dispatches_to_file_mode(mocker):
     fake_run_file_mode = mocker.patch.object(factory_shell, "run_file_mode", return_value=0)
 

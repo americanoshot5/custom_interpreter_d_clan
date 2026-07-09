@@ -4,9 +4,56 @@ from collections.abc import Callable, Sequence
 
 from Assembler import assemble
 from Checker import StaticChecker
-from common import LanguageError, Program, RuntimeValue, Token
+from common import LanguageError, Program, RuntimeValue, Token, TokenType
 from Executor import SExpressionExecutor
 from Tokenizer import tokenize
+
+# var/set!/print/if/for/func/return/class/import 처럼 "(키워드 ...)" 형태로
+# 감싸야 하는 최상위 특수 형태 키워드들. wrap_bare_statement 가 이 목록을
+# 보고 바깥 괄호 생략 여부를 판단한다.
+_BARE_STATEMENT_KEYWORDS = frozenset({
+    TokenType.VAR,
+    TokenType.SET,
+    TokenType.PRINT,
+    TokenType.IF,
+    TokenType.FOR,
+    TokenType.FUNC,
+    TokenType.RETURN,
+    TokenType.CLASS,
+    TokenType.IMPORT,
+})
+
+
+def wrap_bare_statement(
+    text: str,
+    tokenize: Callable[[str], Sequence[Token]],
+    assemble: Callable[[Sequence[Token]], Program],
+) -> str:
+    """REPL 편의 기능: `var a 1` 처럼 단순한 한 줄짜리 문장이면 바깥 괄호를
+    생략해도 `(var a 1)`로 감싸서 실행한다. 중첩된 하위 식은 여전히 자기
+    괄호가 필요하다 (예: `var a (+ 1 2)`는 그대로 두고 바깥만 감싼다).
+
+    이미 괄호로 시작하거나, 첫 토큰이 특수 형태 키워드가 아니거나, 감싼
+    결과가 문장 하나로 깔끔하게 조립되지 않으면 원본 텍스트를 그대로
+    반환한다 (기존 동작/에러 메시지를 그대로 유지하기 위함)."""
+    stripped = text.strip()
+    if not stripped or stripped.startswith("("):
+        return text
+    try:
+        tokens = tokenize(stripped)
+    except LanguageError:
+        return text
+    if not tokens or tokens[0].type not in _BARE_STATEMENT_KEYWORDS:
+        return text
+
+    wrapped = f"({stripped})"
+    try:
+        program = assemble(tokenize(wrapped))
+    except LanguageError:
+        return text
+    if len(program.statements) != 1:
+        return text
+    return wrapped
 
 
 def is_balanced(text: str) -> bool:
@@ -54,7 +101,7 @@ def run_shell(
                 continue
 
         if line.strip() == "":
-            text = "\n".join(buffer)
+            text = wrap_bare_statement("\n".join(buffer), tokenize, assemble)
             saved = checkpoint() if checkpoint is not None else None
             try:
                 tokens = tokenize(text)
