@@ -502,10 +502,10 @@ if text == "restart":
               <article class="bug-case">
                 <h4>함수 정의 결과가 자동 출력</h4>
                 <p>REPL에서 함수 정의만 했는데 함수명이 결과처럼 출력되어, 실행 결과와 선언 결과가 섞여 보이던 문제를 수정했다.</p>
-                <pre><code>func xx (n) (print 10)
-; 기존: xx가 자동 출력됨
-&gt;&gt;&gt; (xx 20)
-10.0</code></pre>
+                <pre><code>&gt;&gt;&gt; func xx (n) (print n)
+xx  ; 기존: 함수명이 자동 출력됨
+&gt;&gt;&gt; xx 20
+20.0</code></pre>
                 <a href="https://github.com/americanoshot5/custom_interpreter_d_clan/pull/41" target="_blank" rel="noreferrer">PR #41</a>
               </article>
               <article class="bug-case">
