@@ -140,7 +140,10 @@ print total</code></pre>
         </div>
         <div class="demo-pairs" aria-label="demo input and output pairs">
           <article>
-            <h3>1. 기초 문법</h3>
+            <div class="demo-title">
+              <h3>1. 기초 문법</h3>
+              <p>변수 선언/출력, 조건문, 반복문, 블록 스코프, 정적배열 생성·수정·조회</p>
+            </div>
             <div class="io-pair">
               <pre><code>(var score 82)
 (print "점수:")
@@ -339,30 +342,7 @@ True
 
         <div class="practice-grid">
           <article class="practice-item">
-            <h3>1. GitHub Actions로 회귀 테스트 강제</h3>
-            <p>
-              기능 개발이 끝날 때마다 해당 테스트를 회귀 테스트 목록에 넣고,
-              PR에서 pytest가 100% 통과하지 않으면 merge할 수 없도록 했다.
-            </p>
-            <p class="impact">효과: 신규 기능이 기존 기능을 깨뜨리는지 자동으로 확인했고, 리뷰어가 수동으로 전체 시나리오를 다시 실행하지 않아도 안정성을 판단할 수 있었다.</p>
-          </article>
-
-          <article class="practice-item">
-            <h3>2. 기능 완성 후 사용자 관점 테스트</h3>
-            <p>
-              구현이 끝난 뒤 실제 사용 흐름으로 입력해보며 내부 테스트만으로는
-              드러나기 어려운 버그를 찾아냈다.
-            </p>
-            <ul class="practice-list">
-              <li>선언 실패 후 재선언 시 이미 정의된 변수로 처리되던 문제</li>
-              <li>if 조건문에 void 함수를 넣으며 null 미구현을 발견한 사례</li>
-              <li>함수 정의 시 함수명이 자동 출력되던 문제</li>
-            </ul>
-            <p class="impact">효과: 테스트가 “정해진 API”를 지킨다면, 사용자 테스트는 “실제로 쓰기 편한지”를 확인해주는 마지막 안전망이 되었다.</p>
-          </article>
-
-          <article class="practice-item">
-            <h3>3. 패턴과 구조를 확장성 관점에서 점검</h3>
+            <h3>1. 패턴과 구조를 확장성 관점에서 점검</h3>
             <p>
               과제에서 제시된 처리 단계를 기반으로 Pipeline 구조와 Interpreter
               구조를 자연스럽게 갖추었고, 추가 기능 구현 과정에서 Dispatch Table이
@@ -376,6 +356,29 @@ True
               <span><strong>Command</strong> debug 명령 리팩토링 후보</span>
             </div>
             <p class="impact">효과: 현재 구조의 강점과 다음 리팩토링 후보를 구분해, 발표 후에도 개선 방향을 설명할 수 있게 되었다.</p>
+          </article>
+
+          <article class="practice-item">
+            <h3>2. GitHub Actions로 회귀 테스트 강제</h3>
+            <p>
+              기능 개발이 끝날 때마다 해당 테스트를 회귀 테스트 목록에 넣고,
+              PR에서 pytest가 100% 통과하지 않으면 merge할 수 없도록 했다.
+            </p>
+            <p class="impact">효과: 신규 기능이 기존 기능을 깨뜨리는지 자동으로 확인했고, 리뷰어가 수동으로 전체 시나리오를 다시 실행하지 않아도 안정성을 판단할 수 있었다.</p>
+          </article>
+
+          <article class="practice-item">
+            <h3>3. 기능 완성 후 사용자 관점 테스트</h3>
+            <p>
+              구현이 끝난 뒤 실제 사용 흐름으로 입력해보며 내부 테스트만으로는
+              드러나기 어려운 버그를 찾아냈다.
+            </p>
+            <ul class="practice-list">
+              <li>선언 실패 후 재선언 시 이미 정의된 변수로 처리되던 문제</li>
+              <li>if 조건문에 void 함수를 넣으며 null 미구현을 발견한 사례</li>
+              <li>함수 정의 시 함수명이 자동 출력되던 문제</li>
+            </ul>
+            <p class="impact">효과: 테스트가 “정해진 API”를 지킨다면, 사용자 테스트는 “실제로 쓰기 편한지”를 확인해주는 마지막 안전망이 되었다.</p>
           </article>
         </div>
       </section>
