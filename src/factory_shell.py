@@ -152,13 +152,13 @@ class DebugSession:
 
     def _write_watch_value(self, name: str) -> None:
         try:
-            value = self._executor._environment.lookup(name)
+            value = self._executor.lookup_variable(name)
         except ExecuteError:
             value = "<undefined>"
         self._write_output(f"Watch {name}: {value}")
 
     def _inspect_scope(self) -> None:
-        values = self._executor._environment._values
+        values = self._executor.current_scope_snapshot()
         if not values:
             self._write_output("Scope: empty")
             return
