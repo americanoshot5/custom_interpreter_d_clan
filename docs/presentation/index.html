@@ -3,12 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Custom Interpreter D-Clan Presentation</title>
+    <title>S-expression 인터프리터</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <header class="site-nav" aria-label="presentation navigation">
-      <a href="#intro">D-Clan</a>
+      <a href="#intro">Intro</a>
       <a href="#demo">Demo</a>
       <a href="#refactor">Refactor</a>
       <a href="#tdd">TDD</a>
@@ -19,11 +19,21 @@
       <section class="hero section" id="intro">
         <div class="hero-copy">
           <p class="eyebrow">Custom Interpreter Team Project</p>
-          <h1>돌아가는 코드에서 함께 바꿀 수 있는 코드로</h1>
-          <p class="lead">
-            같은 인터프리터 과제 안에서 우리 팀은 사용성 선택, 기능 신뢰성,
-            리팩토링, TDD 협업을 하나의 흐름으로 연결했다.
-          </p>
+          <h1>S-expression 인터프리터</h1>
+          <div class="intro-points" aria-label="S-expression introduction">
+            <article>
+              <strong>S-expression이란?</strong>
+              <p>괄호로 감싼 리스트 구조로 코드와 데이터를 표현하는 표기법이다. Lisp 계열 언어에서 대표적으로 사용된다.</p>
+            </article>
+            <article>
+              <strong>어떤 특징인가?</strong>
+              <p>연산자와 피연산자가 같은 리스트 안에 놓여 문법 구조가 단순하다. 파싱 결과도 트리 형태로 자연스럽게 이어진다.</p>
+            </article>
+            <article>
+              <strong>왜 만들었나?</strong>
+              <p>언어 처리의 핵심 단계인 토큰화, 조립, 검사, 실행을 직접 구현해보기 위해 개발했다. 우리는 그 위에 테스트와 리팩토링을 얹어 협업 가능한 코드로 다듬었다.</p>
+            </article>
+          </div>
         </div>
         <div class="code-stage" aria-label="S-expression code demo">
           <div class="code-window">
@@ -75,97 +85,143 @@ print total</code></pre>
       <section class="section" id="demo">
         <div class="section-heading">
           <p class="eyebrow">Reliability First</p>
-          <h2>기능 데모로 먼저 신뢰를 확보한다</h2>
+          <h2>입력과 결과를 함께 보여준다</h2>
           <p>
-            모든 기능을 나열하기보다, 발표에서는 대표 흐름 하나로 충분하다.
-            코드 입력, 파일 실행, 오류 보고, 디버깅을 연결해 실제로 사용할 수
-            있는 언어라는 신뢰를 먼저 만든다.
+            발표 중 전체 데모를 직접 실행하기 어렵다면, 사용자가 입력하는 코드와
+            인터프리터가 돌려주는 결과를 나란히 보여주는 방식이 가장 선명하다.
           </p>
         </div>
-        <div class="demo-flow" aria-label="feature demo flow">
-          <div>
-            <span>1</span>
-            <strong>Prompt</strong>
-            <p>사용자가 한 줄씩 입력하고 세션 상태를 유지한다.</p>
-          </div>
-          <div>
-            <span>2</span>
-            <strong>File</strong>
-            <p>소스 파일을 읽고 오류 줄 번호를 포함해 실행 결과를 보여준다.</p>
-          </div>
-          <div>
-            <span>3</span>
-            <strong>Debug</strong>
-            <p>Stmt 단위 step, breakpoint, continue로 실행 흐름을 확인한다.</p>
-          </div>
-          <div>
-            <span>4</span>
-            <strong>Watch</strong>
-            <p>중단 지점마다 변수 값을 확인해 상태 변화를 추적한다.</p>
-          </div>
+        <div class="demo-pairs" aria-label="demo input and output pairs">
+          <article>
+            <h3>Prompt mode</h3>
+            <div class="io-pair">
+              <pre><code>&gt;&gt;&gt; var total 0
+
+&gt;&gt;&gt; set! total (+ total 3)
+
+&gt;&gt;&gt; print total</code></pre>
+              <pre><code>3.0</code></pre>
+            </div>
+          </article>
+          <article>
+            <h3>File mode</h3>
+            <div class="io-pair">
+              <pre><code>(func add2 (x) {
+  (return (+ x 2))
+})
+(var result (add2 5))
+(print result)</code></pre>
+              <pre><code>7.0</code></pre>
+            </div>
+          </article>
+          <article>
+            <h3>Debug watch</h3>
+            <div class="io-pair">
+              <pre><code>(var total 0)
+(set! total (+ total 3))
+(print total)
+
+debug&gt; watch total
+debug&gt; step
+debug&gt; step
+debug&gt; step</code></pre>
+              <pre><code>Stopped at line 1
+Watch total: &lt;undefined&gt;
+Stopped at line 2
+Watch total: 0.0
+Stopped at line 3
+Watch total: 3.0
+3.0
+Program finished</code></pre>
+            </div>
+          </article>
         </div>
       </section>
 
       <section class="section" id="refactor">
         <div class="section-heading">
           <p class="eyebrow">Before &amp; After</p>
-          <h2>리팩토링은 변경 비용을 낮추는 작업이었다</h2>
+          <h2>디자인 패턴으로 확장 지점을 만들었다</h2>
           <p>
-            발표에서는 세 가지 예시만 보여준다. 핵심은 코드가 예뻐졌다는 말이
-            아니라, 다음 기능을 더 작고 안전하게 추가할 수 있게 되었다는 점이다.
+            리팩토링의 핵심은 단순 정리가 아니라 새 기능을 어디에 추가할지
+            예측 가능하게 만드는 것이었다. 발표에서는 패턴이 코드 품질을 올린
+            대표 사례 세 가지만 보여준다.
           </p>
         </div>
 
         <div class="refactor-grid">
           <article class="refactor-item">
-            <h3>1. Environment 캡슐화</h3>
+            <h3>1. Factory Method 관점의 실행 모드 분리</h3>
             <p>
-              디버그 watch가 실행 환경 내부 딕셔너리에 직접 접근하던 구조를
-              `lookup_variable`, `current_scope_snapshot` 같은 공개 API로 바꿨다.
+              프롬프트, 파일, 디버그 실행을 한 흐름에 섞지 않고 mode별 생성
+              함수로 분리했다. 새 실행 모드가 생겨도 기존 모드의 입출력 흐름을
+              건드리지 않아도 된다.
             </p>
             <div class="comparison compact">
               <pre><code># Before
-self._executor._environment._values</code></pre>
+if mode == "prompt":
+    ...
+elif mode == "run":
+    ...
+elif mode == "debug":
+    ...</code></pre>
               <pre><code># After
-self._executor.current_scope_snapshot()
-self._executor.lookup_variable(name)</code></pre>
+run_prompt_mode(...)
+run_file_mode(path)
+run_debug_mode(source, commands)</code></pre>
             </div>
           </article>
 
           <article class="refactor-item">
-            <h3>2. 배열 연산 검증 분리</h3>
+            <h3>2. Dispatch Table로 문법 확장 비용 축소</h3>
             <p>
-              `Array`, `index`, `set-index!`마다 반복되던 숫자/범위 검증을
-              헬퍼로 분리해 오류 정책을 한 곳에서 관리하게 했다.
-            </p>
-            <div class="comparison compact">
-              <pre><code># Before
-if not isinstance(index, (int, float)):
-    raise ExecuteError(...)
-if idx &lt; 0 or idx &gt;= len(array):
-    raise ExecuteError(...)</code></pre>
-              <pre><code># After
-idx = self._as_array_index(array, value)
-size = self._as_array_size(value)</code></pre>
-            </div>
-          </article>
-
-          <article class="refactor-item">
-            <h3>3. 확장 포인트를 테이블로 정리</h3>
-            <p>
-              새로운 문법과 실행 노드가 추가될 때 조건문이 퍼지지 않도록
-              Assembler와 Executor의 dispatch table을 기준으로 확장했다.
+              Assembler와 Executor에 분기문이 계속 늘어나던 구조를 테이블 기반
+              dispatch로 정리했다. 문법이나 Stmt가 추가될 때 등록 지점이 한 곳으로
+              모인다.
             </p>
             <div class="comparison compact">
               <pre><code># Before
 if token == "var": ...
 elif token == "print": ...
-elif token == "if": ...</code></pre>
+elif token == "class": ...
+elif token == "import": ...</code></pre>
               <pre><code># After
 _SPECIAL_FORMS = {
   TokenType.VAR: "_parse_var_stmt",
-  TokenType.PRINT: "_parse_print_stmt",
+  TokenType.CLASS: "_parse_class_stmt",
+  TokenType.IMPORT: "_parse_import_stmt",
+}
+
+_STMT_DISPATCH = {
+  ClassStmt: "_execute_classstmt",
+  ImportStmt: "_execute_importstmt",
 }</code></pre>
+            </div>
+          </article>
+
+          <article class="refactor-item">
+            <h3>3. Template Method로 오류 보고 정책 확장</h3>
+            <p>
+              기본 Executor의 실행 알고리즘은 유지하고, 파일 모드에서 필요한
+              줄 번호 기반 런타임 오류 보고만 하위 클래스에서 확장했다.
+            </p>
+            <div class="comparison compact">
+              <pre><code># Before
+def execute(program):
+    for stmt in program.statements:
+        try:
+            execute_stmt(stmt)
+        except ExecuteError:
+            print("Runtime error")</code></pre>
+              <pre><code># After
+class FileModeExecutor(SExpressionExecutor):
+    def _execute_stmt(self, stmt):
+        try:
+            return super()._execute_stmt(stmt)
+        except ExecuteError as error:
+            raise RuntimeExecutionError(
+                stmt.location.line, error
+            )</code></pre>
             </div>
           </article>
         </div>
@@ -188,23 +244,48 @@ _SPECIAL_FORMS = {
           </ul>
         </div>
         <div class="test-panel">
-          <h3>테스트 분포</h3>
+          <h3>회귀 테스트 분포</h3>
           <div class="bar-row">
-            <span>Unit & module</span>
-            <div class="bar"><i style="width: 84%"></i></div>
-            <strong>499</strong>
+            <span>Checker</span>
+            <div class="bar"><i style="width: 31%"></i></div>
+            <strong>181</strong>
+          </div>
+          <div class="bar-row">
+            <span>Assembler</span>
+            <div class="bar"><i style="width: 24%"></i></div>
+            <strong>144</strong>
+          </div>
+          <div class="bar-row">
+            <span>Executor</span>
+            <div class="bar"><i style="width: 16%"></i></div>
+            <strong>93</strong>
           </div>
           <div class="bar-row">
             <span>Integration</span>
             <div class="bar"><i style="width: 16%"></i></div>
             <strong>93</strong>
           </div>
+          <div class="bar-row">
+            <span>Shell</span>
+            <div class="bar"><i style="width: 9%"></i></div>
+            <strong>53</strong>
+          </div>
+          <div class="bar-row">
+            <span>Tokenizer</span>
+            <div class="bar"><i style="width: 5%"></i></div>
+            <strong>28</strong>
+          </div>
           <p class="metric">총 592개 pytest 수집 테스트</p>
-          <p class="note">
-            `pytest tests --collect-only -q` 기준으로 집계했다. 파일명에
-            `integration`이 들어간 테스트를 통합 테스트로 분류했으며, 브랜치에
-            따라 총 개수는 약 592~600개 사이에서 달라질 수 있다.
-          </p>
+          <div class="quality-grid">
+            <article>
+              <strong>GitHub Actions</strong>
+              <p>기능 개발이 끝난 테스트는 바로 CI의 pytest 목록에 넣어 회귀 테스트로 고정했다.</p>
+            </article>
+            <article>
+              <strong>Coverage 95%+</strong>
+              <p>마지막에는 코드 커버리지까지 측정해 테스트 품질을 확인했고, 95% 이상으로 평가했다.</p>
+            </article>
+          </div>
         </div>
       </section>
 
