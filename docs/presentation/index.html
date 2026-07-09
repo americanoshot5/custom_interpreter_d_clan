@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Custom Interpreter D-Clan Presentation</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-nav" aria-label="presentation navigation">
+      <a href="#intro">D-Clan</a>
+      <a href="#demo">Demo</a>
+      <a href="#refactor">Refactor</a>
+      <a href="#tdd">TDD</a>
+      <a href="#future">Next</a>
+    </header>
+
+    <main>
+      <section class="hero section" id="intro">
+        <div class="hero-copy">
+          <p class="eyebrow">Custom Interpreter Team Project</p>
+          <h1>돌아가는 코드에서 함께 바꿀 수 있는 코드로</h1>
+          <p class="lead">
+            같은 인터프리터 과제 안에서 우리 팀은 사용성 선택, 기능 신뢰성,
+            리팩토링, TDD 협업을 하나의 흐름으로 연결했다.
+          </p>
+        </div>
+        <div class="code-stage" aria-label="S-expression code demo">
+          <div class="code-window">
+            <div class="window-bar">
+              <span></span>
+              <span></span>
+              <span></span>
+              <strong>prompt session</strong>
+            </div>
+            <pre><code>&gt;&gt;&gt; var total 0
+... 
+&gt;&gt;&gt; set! total (+ total 3)
+... 
+&gt;&gt;&gt; print total
+3.0
+
+debug&gt; watch total
+Watch total: 3.0</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="section split" id="choice">
+        <div>
+          <p class="eyebrow">Team Decision</p>
+          <h2>우리 팀의 언어 사용성 선택</h2>
+          <p>
+            S-expression은 공통 과제의 기반이었지만, 사용자 입력 경험은 팀에서
+            다시 판단했다. 우리는 바깥쪽 global 소괄호를 제거해 REPL에서 더
+            자연스럽게 코드를 입력하도록 만들었다.
+          </p>
+        </div>
+        <div class="comparison">
+          <article class="snippet before">
+            <h3>Before</h3>
+            <pre><code>((var total 0)
+(set! total (+ total 1))
+(print total))</code></pre>
+          </article>
+          <article class="snippet after">
+            <h3>After</h3>
+            <pre><code>var total 0
+set! total (+ total 1)
+print total</code></pre>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="demo">
+        <div class="section-heading">
+          <p class="eyebrow">Reliability First</p>
+          <h2>기능 데모로 먼저 신뢰를 확보한다</h2>
+          <p>
+            모든 기능을 나열하기보다, 발표에서는 대표 흐름 하나로 충분하다.
+            코드 입력, 파일 실행, 오류 보고, 디버깅을 연결해 실제로 사용할 수
+            있는 언어라는 신뢰를 먼저 만든다.
+          </p>
+        </div>
+        <div class="demo-flow" aria-label="feature demo flow">
+          <div>
+            <span>1</span>
+            <strong>Prompt</strong>
+            <p>사용자가 한 줄씩 입력하고 세션 상태를 유지한다.</p>
+          </div>
+          <div>
+            <span>2</span>
+            <strong>File</strong>
+            <p>소스 파일을 읽고 오류 줄 번호를 포함해 실행 결과를 보여준다.</p>
+          </div>
+          <div>
+            <span>3</span>
+            <strong>Debug</strong>
+            <p>Stmt 단위 step, breakpoint, continue로 실행 흐름을 확인한다.</p>
+          </div>
+          <div>
+            <span>4</span>
+            <strong>Watch</strong>
+            <p>중단 지점마다 변수 값을 확인해 상태 변화를 추적한다.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="refactor">
+        <div class="section-heading">
+          <p class="eyebrow">Before &amp; After</p>
+          <h2>리팩토링은 변경 비용을 낮추는 작업이었다</h2>
+          <p>
+            발표에서는 세 가지 예시만 보여준다. 핵심은 코드가 예뻐졌다는 말이
+            아니라, 다음 기능을 더 작고 안전하게 추가할 수 있게 되었다는 점이다.
+          </p>
+        </div>
+
+        <div class="refactor-grid">
+          <article class="refactor-item">
+            <h3>1. Environment 캡슐화</h3>
+            <p>
+              디버그 watch가 실행 환경 내부 딕셔너리에 직접 접근하던 구조를
+              `lookup_variable`, `current_scope_snapshot` 같은 공개 API로 바꿨다.
+            </p>
+            <div class="comparison compact">
+              <pre><code># Before
+self._executor._environment._values</code></pre>
+              <pre><code># After
+self._executor.current_scope_snapshot()
+self._executor.lookup_variable(name)</code></pre>
+            </div>
+          </article>
+
+          <article class="refactor-item">
+            <h3>2. 배열 연산 검증 분리</h3>
+            <p>
+              `Array`, `index`, `set-index!`마다 반복되던 숫자/범위 검증을
+              헬퍼로 분리해 오류 정책을 한 곳에서 관리하게 했다.
+            </p>
+            <div class="comparison compact">
+              <pre><code># Before
+if not isinstance(index, (int, float)):
+    raise ExecuteError(...)
+if idx &lt; 0 or idx &gt;= len(array):
+    raise ExecuteError(...)</code></pre>
+              <pre><code># After
+idx = self._as_array_index(array, value)
+size = self._as_array_size(value)</code></pre>
+            </div>
+          </article>
+
+          <article class="refactor-item">
+            <h3>3. 확장 포인트를 테이블로 정리</h3>
+            <p>
+              새로운 문법과 실행 노드가 추가될 때 조건문이 퍼지지 않도록
+              Assembler와 Executor의 dispatch table을 기준으로 확장했다.
+            </p>
+            <div class="comparison compact">
+              <pre><code># Before
+if token == "var": ...
+elif token == "print": ...
+elif token == "if": ...</code></pre>
+              <pre><code># After
+_SPECIAL_FORMS = {
+  TokenType.VAR: "_parse_var_stmt",
+  TokenType.PRINT: "_parse_print_stmt",
+}</code></pre>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split" id="tdd">
+        <div>
+          <p class="eyebrow">Test Driven Collaboration</p>
+          <h2>TDD는 테스트 기술이 아니라 협업 방식이었다</h2>
+          <p>
+            테스트는 모듈 담당자 사이의 계약이 되었다. 먼저 사용법과 기대
+            동작을 테스트로 정하니 분업 범위가 선명해졌고, 진척률도 감이 아니라
+            통과 여부로 확인할 수 있었다.
+          </p>
+          <ul class="plain-list">
+            <li>기능 구현 전 RED 테스트로 API 사용법 공유</li>
+            <li>유닛 테스트로 모듈 책임 고정</li>
+            <li>통합 테스트로 사용자 시나리오 보호</li>
+            <li>리팩토링 후 전체 테스트로 회귀 확인</li>
+          </ul>
+        </div>
+        <div class="test-panel">
+          <h3>테스트 분포</h3>
+          <div class="bar-row">
+            <span>Unit & module</span>
+            <div class="bar"><i style="width: 84%"></i></div>
+            <strong>499</strong>
+          </div>
+          <div class="bar-row">
+            <span>Integration</span>
+            <div class="bar"><i style="width: 16%"></i></div>
+            <strong>93</strong>
+          </div>
+          <p class="metric">총 592개 pytest 수집 테스트</p>
+          <p class="note">
+            `pytest tests --collect-only -q` 기준으로 집계했다. 파일명에
+            `integration`이 들어간 테스트를 통합 테스트로 분류했으며, 브랜치에
+            따라 총 개수는 약 592~600개 사이에서 달라질 수 있다.
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="future">
+        <div class="section-heading">
+          <p class="eyebrow">What We Learned</p>
+          <h2>현업에 가져갈 수 있는 배움</h2>
+        </div>
+        <div class="lesson-grid">
+          <article>
+            <h3>인터페이스를 먼저 정한다</h3>
+            <p>함수 이름, 입력, 출력, 실패 조건이 먼저 정해지면 각자 구현해도 합류 지점이 흔들리지 않는다.</p>
+          </article>
+          <article>
+            <h3>작은 PR은 리뷰 품질을 올린다</h3>
+            <p>stacked PR로 기능 단위를 작게 유지하니 리뷰어가 맥락을 잃지 않고 피드백할 수 있었다.</p>
+          </article>
+          <article>
+            <h3>리팩토링은 협업 비용을 줄인다</h3>
+            <p>캡슐화와 책임 분리는 단순 미화가 아니라 다음 변경을 더 예측 가능하게 만드는 투자였다.</p>
+          </article>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
