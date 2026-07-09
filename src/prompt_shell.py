@@ -81,6 +81,8 @@ def run_shell(
     execute: Callable[[Program], RuntimeValue],
     prompt: str = ">>> ",
     continuation_prompt: str = "... ",
+    checkpoint: Callable[[], object] | None = None,
+    restore: Callable[[object], None] | None = None,
 ) -> None:
     buffer: list[str] = []
 
@@ -100,12 +102,15 @@ def run_shell(
 
         if line.strip() == "":
             text = wrap_bare_statement("\n".join(buffer), tokenize, assemble)
+            saved = checkpoint() if checkpoint is not None else None
             try:
                 tokens = tokenize(text)
                 program = assemble(tokens)
                 check(program)
                 result = execute(program)
             except LanguageError as error:
+                if saved is not None and restore is not None:
+                    restore(saved)
                 write_output(f"Error: {error}")
             else:
                 if result is not None:
@@ -127,6 +132,8 @@ def main() -> None:
         assemble=assemble,
         check=checker.check,
         execute=executor.execute,
+        checkpoint=checker.checkpoint,
+        restore=checker.restore,
     )
 
 

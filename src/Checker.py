@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 from typing import ClassVar
 
@@ -151,6 +152,14 @@ class StaticChecker(Checker):
         """scopes 를 넘기면 여러 check() 호출에 걸쳐 스코프(선언된 변수)를
         유지한다 (예: REPL 세션에서 이전 입력의 변수를 다음 입력에서도 참조)."""
         self._scopes = scopes if scopes is not None else _ScopeStack()
+
+    def checkpoint(self) -> object:
+        """스코프 상태를 스냅샷으로 저장해 반환한다 (REPL 롤백용)."""
+        return copy.deepcopy(self._scopes)
+
+    def restore(self, saved: object) -> None:
+        """checkpoint()로 저장한 스코프 상태로 복원한다."""
+        self._scopes = saved  # type: ignore[assignment]
 
     def check(self, program: Program) -> None:
         self._method_stack: list[dict] = []  # [{class_name, has_parent, is_init}]

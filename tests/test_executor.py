@@ -180,6 +180,27 @@ def test_execute_varstmt():
 
     assert calc.execute(program_output) == 9
 
+def test_execute_varstmt_twice():
+    program_error = Program(
+        (VarStmt(name='test', initializer=ListExpr((LiteralExpr(3), IdentifierExpr("*"), LiteralExpr(3)))),)
+    )
+
+    program = Program(
+        (VarStmt(name='test', initializer=ListExpr((IdentifierExpr("*"), LiteralExpr(2), LiteralExpr(3)))),)
+    )
+
+    program_output = Program(
+        (ExpressionStmt(ListExpr((IdentifierExpr("+"), IdentifierExpr('test'), LiteralExpr(3)))),)
+    )
+
+    calc = SExpressionExecutor()
+    try:
+        calc.execute(program_error)
+    except ExecuteError:
+        calc.execute(program)
+
+    assert calc.execute(program_output) == 9
+
 def test_execute_error_varstmt():
     program = Program(
         (VarStmt(name='test', initializer=ListExpr((IdentifierExpr("*"), LiteralExpr(2), LiteralExpr(3)))),)
