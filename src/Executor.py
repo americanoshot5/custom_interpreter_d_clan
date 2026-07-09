@@ -119,6 +119,10 @@ class Environment:
             return
         raise ExecuteError(f"Undefined variable '{name}'")
 
+    def snapshot(self) -> dict[str, RuntimeValue]:
+        """현재(가장 안쪽) 스코프 변수만 복사해 반환한다."""
+        return dict(self._values)
+
 
 # ── 실행기 ────────────────────────────────────────────────────────────────────
 
@@ -147,6 +151,16 @@ class SExpressionExecutor(Executor):
         for stmt in program.statements:
             result = self._execute_stmt(stmt)
         return result
+
+    # ── 디버거 공개 API ───────────────────────────────────────────────────────
+
+    def lookup_variable(self, name: str) -> RuntimeValue:
+        """현재 스코프 체인에서 변수를 조회한다. 없으면 ExecuteError."""
+        return self._environment.lookup(name)
+
+    def current_scope_snapshot(self) -> dict[str, RuntimeValue]:
+        """현재(가장 안쪽) 스코프의 변수 이름→값 사전을 복사해 반환한다."""
+        return self._environment.snapshot()
 
     # ── 문(Stmt) 실행 ─────────────────────────────────────────────────────────
 
