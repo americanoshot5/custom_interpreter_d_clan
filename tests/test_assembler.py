@@ -191,8 +191,8 @@ def ident(name: str, line: int = 1, col: int = 1) -> Token:
 
 
 def kw(type_: TokenType, line: int = 1, col: int = 1) -> Token:
-    # TRUE / FALSE 는 literal 값을 명시적으로 넣어야 LiteralExpr 에 전달된다
-    literal = {TokenType.TRUE: True, TokenType.FALSE: False}.get(type_)
+    # TRUE / FALSE / NULL 는 literal 값을 명시적으로 넣어야 LiteralExpr 에 전달된다
+    literal = {TokenType.TRUE: True, TokenType.FALSE: False, TokenType.NULL: None}.get(type_)
     return tok(type_, type_.value, literal=literal, line=line, col=col)
 
 
@@ -320,6 +320,12 @@ def test_false_literal():
     expr = unwrap([kw(TokenType.FALSE), eof()])
     assert isinstance(expr, LiteralExpr)
     assert expr.value is False
+
+
+def test_null_literal():
+    expr = unwrap([kw(TokenType.NULL), eof()])
+    assert isinstance(expr, LiteralExpr)
+    assert expr.value is None
 
 
 def test_identifier():

@@ -501,7 +501,7 @@ class SExpressionAssembler(Assembler):
             raise AssembleError(f"Unexpected ')' at {token.location.line}:{token.location.column}")
         if token.type is TokenType.RIGHT_BRACKET:
             raise AssembleError(f"Unexpected ']' at {token.location.line}:{token.location.column}")
-        if token.type in {TokenType.NUMBER, TokenType.STRING, TokenType.TRUE, TokenType.FALSE}:
+        if token.type in {TokenType.NUMBER, TokenType.STRING, TokenType.TRUE, TokenType.FALSE, TokenType.NULL}:
             return LiteralExpr(token.literal, location=token.location)
         if token.type is TokenType.DOTIDENTIFIER:
             obj_name, slot_name = self._split_dot_identifier(token.lexeme)
