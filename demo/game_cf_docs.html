@@ -1,0 +1,1314 @@
+<title>SLIP Dungeon RPG — game.cf 분석</title>
+<meta name="description" content="demo/game.cf 코드 구성 및 게임 매뉴얼 — SLIP S-expression 언어 기반 5층 던전 RPG">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0F1117;
+    --surface:  #181C27;
+    --surface2: #20253A;
+    --border:   #29314A;
+    --text:     #DED9C8;
+    --text2:    #6C7D9A;
+    --text3:    #4A576E;
+    --gold:     #C8A848;
+    --gold-dim: #8A7230;
+    --frost:    #4B7CBC;
+    --crimson:  #B53838;
+    --emerald:  #3A8858;
+    --violet:   #7555A5;
+    --amber:    #C8783A;
+    --nav-w:    196px;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    font-size: 14.5px;
+    line-height: 1.65;
+    min-height: 100vh;
+  }
+
+  /* ── NAV ── */
+  .nav {
+    position: fixed;
+    top: 0; left: 0;
+    width: var(--nav-w);
+    height: 100vh;
+    background: #0A0D14;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 20px 0 40px;
+    z-index: 100;
+  }
+  .nav-logo {
+    padding: 0 16px 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 12px;
+  }
+  .nav-logo .game-title {
+    font-family: 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--gold);
+    letter-spacing: 0.04em;
+    line-height: 1.3;
+  }
+  .nav-logo .sub {
+    font-size: 10.5px;
+    color: var(--text3);
+    margin-top: 3px;
+    letter-spacing: 0.02em;
+  }
+  .nav-group-label {
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text3);
+    padding: 14px 16px 5px;
+  }
+  .nav a {
+    display: block;
+    padding: 6px 16px;
+    font-size: 13px;
+    color: var(--text2);
+    text-decoration: none;
+    border-left: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+  .nav a:hover {
+    color: var(--text);
+    background: rgba(255,255,255,0.04);
+    border-left-color: var(--border);
+  }
+  .nav a.active {
+    color: var(--gold);
+    border-left-color: var(--gold);
+    background: rgba(200,168,72,0.07);
+  }
+
+  /* ── MAIN ── */
+  .main {
+    margin-left: var(--nav-w);
+    padding: 0 40px 80px;
+    max-width: calc(var(--nav-w) + 880px);
+  }
+
+  /* ── PAGE HEADER ── */
+  .page-header {
+    padding: 48px 0 36px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 40px;
+  }
+  .page-header .eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--gold-dim);
+    margin-bottom: 10px;
+  }
+  .page-header h1 {
+    font-family: 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+    font-size: 36px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+    text-wrap: balance;
+    margin-bottom: 12px;
+  }
+  .page-header h1 .accent { color: var(--gold); }
+  .page-header .lead {
+    font-size: 14.5px;
+    color: var(--text2);
+    max-width: 560px;
+    margin-bottom: 20px;
+  }
+  .run-cmd {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 8px 16px;
+  }
+  .run-cmd .label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text3);
+  }
+  .run-cmd code {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 13px;
+    color: var(--emerald);
+    letter-spacing: 0.01em;
+  }
+
+  /* ── SECTIONS ── */
+  section {
+    margin-bottom: 56px;
+    scroll-margin-top: 24px;
+  }
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .section-header h2 {
+    font-family: 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    text-wrap: balance;
+  }
+  .section-header .tag {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 3px;
+    background: var(--surface2);
+    color: var(--text3);
+  }
+  .section-desc {
+    font-size: 13.5px;
+    color: var(--text2);
+    margin-bottom: 16px;
+    max-width: 640px;
+  }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 20px 22px;
+    margin-bottom: 14px;
+  }
+  .card-gold   { border-left: 3px solid var(--gold); }
+  .card-frost  { border-left: 3px solid var(--frost); }
+  .card-crimson{ border-left: 3px solid var(--crimson); }
+  .card-emerald{ border-left: 3px solid var(--emerald); }
+  .card-violet { border-left: 3px solid var(--violet); }
+  .card-amber  { border-left: 3px solid var(--amber); }
+
+  .card h3 {
+    font-family: 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    color: var(--text);
+  }
+  .card h4 {
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin: 14px 0 7px;
+  }
+  .card h4:first-child { margin-top: 0; }
+
+  /* ── TABLES ── */
+  .tbl-wrap { overflow-x: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  th {
+    text-align: left;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--text3);
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  td {
+    padding: 7px 12px;
+    border-bottom: 1px solid rgba(41,49,74,0.6);
+    vertical-align: top;
+    color: var(--text);
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* ── CODE ── */
+  code {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 12.5px;
+    background: rgba(0,0,0,0.35);
+    border: 1px solid var(--border);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--frost);
+    white-space: nowrap;
+  }
+  pre {
+    background: #0A0D13;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--text);
+    margin-top: 10px;
+  }
+  pre .kw   { color: var(--violet); }
+  pre .fn   { color: var(--gold); }
+  pre .str  { color: var(--emerald); }
+  pre .cm   { color: var(--text3); font-style: italic; }
+  pre .num  { color: var(--amber); }
+  pre .op   { color: var(--frost); }
+  pre .cls  { color: #B48DD4; }
+  pre .field{ color: #7FBFFF; }
+
+  /* ── COMMAND CHIPS ── */
+  .cmd-chip {
+    display: inline-block;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 12.5px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-bottom: 2px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    color: var(--gold);
+    white-space: nowrap;
+  }
+
+  /* ── CLASS HIERARCHY ── */
+  .hierarchy {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    padding: 24px 0;
+  }
+  .hier-root {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .hier-node {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 160px;
+    padding: 10px 0;
+    border: 1px solid;
+    border-radius: 5px;
+    font-family: 'Palatino Linotype', Palatino, Georgia, serif;
+    font-size: 15px;
+    font-weight: 700;
+    text-align: center;
+    position: relative;
+  }
+  .hier-node small {
+    display: block;
+    font-family: system-ui, sans-serif;
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    opacity: 0.7;
+    margin-top: 2px;
+  }
+  .hier-node.base {
+    background: rgba(75,124,188,0.12);
+    border-color: var(--frost);
+    color: #7EB4FF;
+    width: 200px;
+  }
+  .hier-node.hero {
+    background: rgba(117,85,165,0.12);
+    border-color: var(--violet);
+    color: #B48DD4;
+  }
+  .hier-node.enemy {
+    background: rgba(181,56,56,0.12);
+    border-color: var(--crimson);
+    color: #E07070;
+  }
+  .hier-trunk {
+    width: 2px;
+    height: 28px;
+    background: var(--border);
+  }
+  .hier-row {
+    display: flex;
+    gap: 40px;
+    align-items: flex-start;
+    position: relative;
+  }
+  .hier-row::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 80px;
+    right: 80px;
+    height: 2px;
+    background: var(--border);
+  }
+  .hier-branch {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+  .hier-branch-trunk {
+    width: 2px;
+    height: 22px;
+    background: var(--border);
+  }
+
+  /* ── TURN FLOW ── */
+  .flow {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    max-width: 480px;
+  }
+  .flow-step {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .flow-left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+    width: 32px;
+  }
+  .flow-dot {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    flex-shrink: 0;
+    border: 2px solid;
+  }
+  .flow-line {
+    width: 2px;
+    flex: 1;
+    min-height: 22px;
+    background: var(--border);
+    margin: 0 auto;
+  }
+  .flow-content {
+    padding: 5px 0 22px;
+    flex: 1;
+  }
+  .flow-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 3px;
+  }
+  .flow-desc {
+    font-size: 12.5px;
+    color: var(--text2);
+    line-height: 1.5;
+  }
+
+  /* ── STAT PILLS ── */
+  .stat-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .stat-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 2px 10px;
+    font-size: 12px;
+  }
+  .stat-pill .sname {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text3);
+  }
+  .stat-pill .sval { font-variant-numeric: tabular-nums; }
+
+  /* ── SKILL BADGE ── */
+  .skill-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .sk-normal  { background: rgba(75,124,188,0.15); color: var(--frost); border: 1px solid rgba(75,124,188,0.3); }
+  .sk-slash   { background: rgba(200,168,72,0.12); color: var(--gold);  border: 1px solid rgba(200,168,72,0.25); }
+  .sk-heavy   { background: rgba(200,120,58,0.12); color: var(--amber); border: 1px solid rgba(200,120,58,0.3); }
+  .sk-rally   { background: rgba(58,136,88,0.12);  color: var(--emerald); border: 1px solid rgba(58,136,88,0.3); }
+  .sk-dark    { background: rgba(117,85,165,0.12); color: var(--violet); border: 1px solid rgba(117,85,165,0.3); }
+  .sk-boss    { background: rgba(181,56,56,0.15);  color: var(--crimson); border: 1px solid rgba(181,56,56,0.3); }
+
+  /* ── FILE STRUCTURE ── */
+  .file-tree {
+    background: #0A0D13;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 16px 18px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 12.5px;
+    line-height: 1.9;
+  }
+  .ft-group { color: var(--text3); }
+  .ft-func  { color: var(--gold); }
+  .ft-class { color: var(--frost); }
+  .ft-var   { color: var(--amber); }
+  .ft-cmd   { color: var(--emerald); }
+  .ft-comment { color: var(--text3); font-style: italic; }
+
+  /* ── MONSTER GRID ── */
+  .monster-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 12px;
+  }
+  .monster-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+  }
+  .monster-card .m-name {
+    font-family: 'Palatino Linotype', Palatino, Georgia, serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .monster-card.boss-card {
+    border-color: var(--crimson);
+    background: rgba(181,56,56,0.07);
+  }
+  .monster-card.boss-card .m-name { color: #E07070; }
+
+  /* ── COLUMNS ── */
+  .cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  /* ── HP BAR ── */
+  .hp-bar-wrap { margin-top: 6px; }
+  .hp-label { font-size: 10.5px; color: var(--text3); font-variant-numeric: tabular-nums; margin-bottom: 3px; }
+  .hp-bar { height: 5px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+  .hp-fill { height: 100%; border-radius: 3px; background: var(--emerald); }
+
+  /* ── DIVIDER ── */
+  .divider { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+
+  /* ── HIGHLIGHT BOXES ── */
+  .info-box {
+    background: rgba(75,124,188,0.08);
+    border: 1px solid rgba(75,124,188,0.2);
+    border-radius: 5px;
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--text2);
+    margin-top: 12px;
+  }
+  .warn-box {
+    background: rgba(181,56,56,0.08);
+    border: 1px solid rgba(181,56,56,0.2);
+    border-radius: 5px;
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--text2);
+    margin-top: 12px;
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 740px) {
+    .nav { position: static; width: 100%; height: auto; border-right: none; border-bottom: 1px solid var(--border); overflow-x: auto; display: flex; flex-direction: row; padding: 12px 8px; gap: 0; }
+    .nav-logo { display: none; }
+    .nav-group-label { display: none; }
+    .nav a { white-space: nowrap; padding: 5px 10px; border-left: none; border-bottom: 2px solid transparent; }
+    .nav a.active { border-bottom-color: var(--gold); border-left: none; }
+    .main { margin-left: 0; padding: 0 18px 60px; max-width: 100%; }
+    .cols-2 { grid-template-columns: 1fr; }
+    .monster-grid { grid-template-columns: 1fr; }
+    .page-header { padding: 24px 0 24px; }
+    .page-header h1 { font-size: 26px; }
+  }
+</style>
+
+<nav class="nav" id="sidenav">
+  <div class="nav-logo">
+    <div class="game-title">SLIP Dungeon RPG</div>
+    <div class="sub">game.cf 문서</div>
+  </div>
+
+  <div class="nav-group-label">게임 매뉴얼</div>
+  <a href="#quickstart">빠른 시작</a>
+  <a href="#commands">커맨드 레퍼런스</a>
+  <a href="#monsters">몬스터 도감</a>
+  <a href="#leveling">레벨 시스템</a>
+
+  <div class="nav-group-label">코드 구성</div>
+  <a href="#structure">파일 구조</a>
+  <a href="#hierarchy">클래스 계층도</a>
+  <a href="#fighter">Fighter 클래스</a>
+  <a href="#hero">Hero 클래스</a>
+  <a href="#enemy">Enemy 클래스</a>
+  <a href="#functions">전역 함수</a>
+  <a href="#gamestate">게임 상태</a>
+  <a href="#turnflow">턴 흐름</a>
+</nav>
+
+<main class="main">
+
+  <!-- PAGE HEADER -->
+  <header class="page-header">
+    <div class="eyebrow">demo / game.cf</div>
+    <h1>SLIP <span class="accent">Dungeon RPG</span></h1>
+    <p class="lead">SLIP S-expression 언어로 구현한 5층 던전 RPG. 클래스 기반 아키텍처, 인터랙티브 REPL 전투 시스템.</p>
+    <div class="run-cmd">
+      <span class="label">실행</span>
+      <code>python -X utf8 src/factory_shell.py play demo/game.cf</code>
+    </div>
+  </header>
+
+  <!-- QUICK START -->
+  <section id="quickstart">
+    <div class="section-header">
+      <h2>빠른 시작</h2>
+      <span class="tag">Manual</span>
+    </div>
+    <p class="section-desc">게임을 로드한 뒤 REPL에서 아래 커맨드를 입력합니다. <code>(start_game)</code>으로 시작, 각 턴에 행동을 선택하세요.</p>
+
+    <div class="card card-gold">
+      <h4>게임 흐름 요약</h4>
+      <p style="font-size:13.5px; color:var(--text2);">① <code>(start_game)</code> 입력 → ② 층별 몬스터와 교대 전투 → ③ 5층 보스 드래곤 군주 격파 → 클리어</p>
+      <div class="info-box" style="margin-top:10px;">
+        전투는 매 턴 <strong style="color:var(--text);">플레이어 행동 → 몬스터 반격</strong> 순으로 진행됩니다. 몬스터를 처치하면 EXP와 확률적으로 물약을 획득합니다.
+      </div>
+    </div>
+  </section>
+
+  <!-- COMMANDS -->
+  <section id="commands">
+    <div class="section-header">
+      <h2>커맨드 레퍼런스</h2>
+      <span class="tag">Manual</span>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>커맨드</th>
+            <th>유형</th>
+            <th>효과</th>
+            <th>특이사항</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="cmd-chip">(start_game)</span></td>
+            <td><span style="color:var(--emerald)">시스템</span></td>
+            <td>게임 초기화 및 1층 시작</td>
+            <td>재시작도 동일 커맨드</td>
+          </tr>
+          <tr>
+            <td><span class="cmd-chip">(attack)</span></td>
+            <td><span style="color:var(--frost)">공격</span></td>
+            <td>보통 공격. 데미지 = ATK − 적 DEF (최소 1)</td>
+            <td>항상 명중</td>
+          </tr>
+          <tr>
+            <td><span class="cmd-chip">(power)</span></td>
+            <td><span style="color:var(--frost)">공격</span></td>
+            <td>강타. 데미지 ≈ 2× ATK − 적 DEF</td>
+            <td>25% 확률 미스 (<code>rng &gt; 74</code>)</td>
+          </tr>
+          <tr>
+            <td><span class="cmd-chip">(special)</span></td>
+            <td><span style="color:var(--violet)">필살기</span></td>
+            <td>천둥 일격. 데미지 = ATK × 3, DEF 완전 무시</td>
+            <td><strong style="color:var(--gold)">전투당 1회</strong> — 적 처치 후 다음 전투에서 충전</td>
+          </tr>
+          <tr>
+            <td><span class="cmd-chip">(guard)</span></td>
+            <td><span style="color:var(--amber)">방어</span></td>
+            <td>방어 자세. 이번 턴 받는 피해 50% 감소</td>
+            <td>공격 행동 없음. 턴 종료 후 자동 해제</td>
+          </tr>
+          <tr>
+            <td><span class="cmd-chip">(potion)</span></td>
+            <td><span style="color:var(--emerald)">회복</span></td>
+            <td>물약 사용. HP +40 (최대 HP 초과 불가)</td>
+            <td>물약 0개 시 사용 불가 (적은 반격)</td>
+          </tr>
+          <tr>
+            <td><span class="cmd-chip">(status)</span></td>
+            <td><span style="color:var(--text2)">정보</span></td>
+            <td>플레이어·현재 적 스탯 출력</td>
+            <td>전투 소비 없음</td>
+          </tr>
+          <tr>
+            <td><span class="cmd-chip">exit</span></td>
+            <td><span style="color:var(--text2)">시스템</span></td>
+            <td>REPL 종료</td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="info-box" style="margin-top:16px;">
+      <strong style="color:var(--text);">데미지 공식</strong><br>
+      보통 공격: <code>max(1, ATK − 적DEF)</code> &nbsp;·&nbsp;
+      강타: <code>max(1, ATK − 적DEF + ATK)</code> &nbsp;·&nbsp;
+      필살기: <code>ATK × 3</code> (DEF 무시) &nbsp;·&nbsp;
+      방어 시 수령 피해: <code>max(1, 원데미지 / 2)</code>
+    </div>
+  </section>
+
+  <!-- MONSTERS -->
+  <section id="monsters">
+    <div class="section-header">
+      <h2>몬스터 도감</h2>
+      <span class="tag">Manual</span>
+    </div>
+    <p class="section-desc">일반 몬스터(층 1–4)는 5종 중 랜덤 등장. 층이 높을수록 HP·ATK 상승. 5층은 항상 보스.</p>
+    <p style="font-size:12.5px; color:var(--text3); margin-bottom:14px;">일반 몬스터 스탯 공식 — HP: 20 + (층×8) + rand(8) &nbsp;·&nbsp; ATK: 5 + 층 + rand(4) &nbsp;·&nbsp; DEF: rand(층+2)</p>
+
+    <div class="monster-grid">
+      <div class="monster-card">
+        <div class="m-name">슬라임</div>
+        <div style="margin-bottom:6px;"><span class="skill-badge sk-normal">일반 공격</span></div>
+        <p style="font-size:12.5px; color:var(--text2);">매 턴 일반 공격만 사용. 단순하지만 초반 HP 관리에 주의.</p>
+        <div class="stat-row">
+          <span class="stat-pill"><span class="sname">Skill</span><span class="sval" style="color:var(--frost)">0 – Normal</span></span>
+        </div>
+      </div>
+      <div class="monster-card">
+        <div class="m-name">고블린</div>
+        <div style="margin-bottom:6px;"><span class="skill-badge sk-slash">연속 베기</span></div>
+        <p style="font-size:12.5px; color:var(--text2);">50% 확률로 연속 베기(2타) 사용. 각 타격은 기본 데미지의 절반. 첫 타격으로 사망 시 2타 생략.</p>
+        <div class="stat-row">
+          <span class="stat-pill"><span class="sname">Skill</span><span class="sval" style="color:var(--gold)">1 – Quick Slash</span></span>
+        </div>
+      </div>
+      <div class="monster-card">
+        <div class="m-name">오크</div>
+        <div style="margin-bottom:6px;"><span class="skill-badge sk-heavy">강타</span></div>
+        <p style="font-size:12.5px; color:var(--text2);">40% 확률로 강타(2배 데미지). 높은 DEF를 보유하는 경우 있음. 방어 커맨드 활용 권장.</p>
+        <div class="stat-row">
+          <span class="stat-pill"><span class="sname">Skill</span><span class="sval" style="color:var(--amber)">2 – Heavy Strike</span></span>
+        </div>
+      </div>
+      <div class="monster-card">
+        <div class="m-name">스켈레톤</div>
+        <div style="margin-bottom:6px;"><span class="skill-badge sk-rally">기력 회복</span></div>
+        <p style="font-size:12.5px; color:var(--text2);">HP 50% 이하 + 60% 확률 시 HP +20 회복. 빠르게 처치하지 않으면 장기전 돌입.</p>
+        <div class="stat-row">
+          <span class="stat-pill"><span class="sname">Skill</span><span class="sval" style="color:var(--emerald)">3 – Rally Heal</span></span>
+        </div>
+      </div>
+      <div class="monster-card">
+        <div class="m-name">다크나이트</div>
+        <div style="margin-bottom:6px;"><span class="skill-badge sk-dark">다크 슬래시</span></div>
+        <p style="font-size:12.5px; color:var(--text2);">50% 확률로 강타. 고ATK 유닛. 방어 자세로 강타를 반감하는 전략이 효과적.</p>
+        <div class="stat-row">
+          <span class="stat-pill"><span class="sname">Skill</span><span class="sval" style="color:var(--violet)">4 – Dark Slash</span></span>
+        </div>
+      </div>
+      <div class="monster-card boss-card">
+        <div class="m-name">★ 드래곤 군주 (5층 보스)</div>
+        <div style="margin-bottom:6px;">
+          <span class="skill-badge sk-boss">복합 스킬</span>
+        </div>
+        <p style="font-size:12.5px; color:var(--text2);">고정 스탯. HP 50% 이하일 때 추가로 회복 스킬 사용. 필살기 ATK×3=45로 한 방에 쓰러지지 않으므로 장기전 준비 필수.</p>
+        <div class="stat-row">
+          <span class="stat-pill"><span class="sname">HP</span><span class="sval" style="color:var(--crimson)">130</span></span>
+          <span class="stat-pill"><span class="sname">ATK</span><span class="sval">25</span></span>
+          <span class="stat-pill"><span class="sname">DEF</span><span class="sval">8</span></span>
+          <span class="stat-pill"><span class="sname">EXP</span><span class="sval" style="color:var(--gold)">60</span></span>
+        </div>
+        <div class="hp-bar-wrap">
+          <div class="hp-bar"><div class="hp-fill" style="width:100%;background:var(--crimson);"></div></div>
+        </div>
+        <div style="font-size:11px; color:var(--text3); margin-top:4px;">
+          스킬 분기 — roll&gt;84 (저체력 시 회복 +25) → roll&gt;74 강타 → roll&gt;49 연속 베기 → 일반공격
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LEVELING -->
+  <section id="leveling">
+    <div class="section-header">
+      <h2>레벨 시스템</h2>
+      <span class="tag">Manual</span>
+    </div>
+    <p class="section-desc">몬스터 처치 시 EXP 획득. <code>exp &gt; expreq</code> 조건 달성 시 레벨업.</p>
+    <div class="cols-2">
+      <div class="card card-emerald">
+        <h4>레벨업 보너스 (1회당)</h4>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>스탯</th><th>증가량</th></tr></thead>
+            <tbody>
+              <tr><td>MaxHP</td><td style="color:var(--emerald)">+20</td></tr>
+              <tr><td>현재 HP</td><td style="color:var(--emerald)">+20 (MaxHP 초과 불가)</td></tr>
+              <tr><td>ATK</td><td style="color:var(--frost)">+3</td></tr>
+              <tr><td>DEF</td><td style="color:var(--amber)">+1</td></tr>
+              <tr><td>EXP 필요량</td><td>+20 누적</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card card-gold">
+        <h4>EXP 수치 (층별 기준)</h4>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>층</th><th>EXP 보상</th><th>필요 누적</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td>14</td><td rowspan="4" style="color:var(--text3); font-size:12px; vertical-align:middle;">Lv.1→2: 30<br>Lv.2→3: 50<br>Lv.3→4: 70</td></tr>
+              <tr><td>2</td><td>18</td></tr>
+              <tr><td>3</td><td>22</td></tr>
+              <tr><td>4</td><td>26</td></tr>
+              <tr><td>5 (보스)</td><td style="color:var(--gold)">60</td><td></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="info-box">
+      물약은 몬스터 처치 시 <strong style="color:var(--text)">약 50% 확률</strong>로 1개 추가 획득 (<code>rng &gt; 48</code> 조건).
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- FILE STRUCTURE -->
+  <section id="structure">
+    <div class="section-header">
+      <h2>파일 구조</h2>
+      <span class="tag">Code</span>
+    </div>
+    <p class="section-desc">game.cf의 선언 순서. SLIP Checker는 전방 참조를 불허하므로, Enemy 클래스가 참조하는 스킬 함수들이 클래스 정의보다 먼저 선언됩니다.</p>
+
+    <div class="file-tree">
+<span class="ft-comment">─── 출력 배너 ──────────────────────────────────────</span>
+<span class="ft-group">  (print ...)            </span><span class="ft-comment">커맨드 목록 표시</span>
+
+<span class="ft-comment">─── 유틸리티 함수 ──────────────────────────────────</span>
+<span class="ft-func">  (func mod a b)         </span><span class="ft-comment">재귀 나머지 연산</span>
+<span class="ft-func">  (func max2 a b)        </span><span class="ft-comment">두 값 중 최댓값</span>
+<span class="ft-func">  (func min2 a b)        </span><span class="ft-comment">두 값 중 최솟값</span>
+<span class="ft-var">  (var _seed 73)         </span><span class="ft-comment">LCG 시드</span>
+<span class="ft-func">  (func rng)             </span><span class="ft-comment">의사 난수 생성 (0–96)</span>
+<span class="ft-func">  (func rand_n n)        </span><span class="ft-comment">0 ~ n-1 범위 정수</span>
+
+<span class="ft-comment">─── 클래스 정의 ─────────────────────────────────────</span>
+<span class="ft-class">  (class Fighter)        </span><span class="ft-comment">전투체 기반 클래스</span>
+<span class="ft-class">  (class Hero : Fighter) </span><span class="ft-comment">플레이어 클래스</span>
+
+<span class="ft-comment">─── 몬스터 스킬 함수 (Enemy 전방 참조 방지) ────────</span>
+<span class="ft-func">  (func enemy_normal_atk)      </span><span class="ft-comment">일반 공격</span>
+<span class="ft-func">  (func enemy_heavy_atk)       </span><span class="ft-comment">강타 (2×)</span>
+<span class="ft-func">  (func enemy_quick_slash)     </span><span class="ft-comment">연속 베기 (2타)</span>
+<span class="ft-func">  (func enemy_heavy_or_normal) </span><span class="ft-comment">오크 행동</span>
+<span class="ft-func">  (func enemy_rally_or_normal) </span><span class="ft-comment">스켈레톤 행동</span>
+<span class="ft-func">  (func enemy_dark_slash)      </span><span class="ft-comment">다크나이트 행동</span>
+<span class="ft-func">  (func enemy_boss_turn)       </span><span class="ft-comment">드래곤 보스 행동</span>
+
+<span class="ft-class">  (class Enemy : Fighter) </span><span class="ft-comment">몬스터 클래스</span>
+
+<span class="ft-comment">─── 게임 상태 변수 ──────────────────────────────────</span>
+<span class="ft-var">  (var hero ...)         </span><span class="ft-comment">Hero 인스턴스</span>
+<span class="ft-var">  (var cur_enemy ...)    </span><span class="ft-comment">Enemy 인스턴스 (재사용)</span>
+<span class="ft-var">  (var game_active ...)  </span><span class="ft-comment">게임 진행 플래그</span>
+<span class="ft-var">  (var enames ...)       </span><span class="ft-comment">몬스터 이름 배열 [5]</span>
+<span class="ft-var">  (var eskill ...)       </span><span class="ft-comment">스킬 타입 배열 [5]</span>
+
+<span class="ft-comment">─── 게임 로직 함수 ──────────────────────────────────</span>
+<span class="ft-func">  (func spawn_enemy floor)     </span><span class="ft-comment">적 스탯 설정 + 배틀 리셋</span>
+<span class="ft-func">  (func show_floor_header)     </span><span class="ft-comment">층 진입 UI 출력</span>
+<span class="ft-func">  (func do_action action_type) </span><span class="ft-comment">턴 메인 로직</span>
+<span class="ft-func">  (func start_game)            </span><span class="ft-comment">게임 초기화</span>
+
+<span class="ft-comment">─── 사용자 커맨드 래퍼 ─────────────────────────────</span>
+<span class="ft-cmd">  (func attack)  (func power)  (func potion)</span>
+<span class="ft-cmd">  (func special) (func guard)  (func status)</span>
+    </div>
+  </section>
+
+  <!-- CLASS HIERARCHY -->
+  <section id="hierarchy">
+    <div class="section-header">
+      <h2>클래스 계층도</h2>
+      <span class="tag">Code</span>
+    </div>
+    <p class="section-desc">단일 상속. Fighter가 공통 전투 로직을 보유하며, Hero와 Enemy가 확장합니다.</p>
+
+    <div class="hierarchy">
+      <div class="hier-root">
+        <div class="hier-node base">
+          Fighter
+          <small>기반 클래스</small>
+        </div>
+        <div class="hier-trunk"></div>
+        <div class="hier-row">
+          <div class="hier-branch">
+            <div class="hier-branch-trunk"></div>
+            <div class="hier-node hero">
+              Hero
+              <small>: Fighter</small>
+            </div>
+          </div>
+          <div class="hier-branch">
+            <div class="hier-branch-trunk"></div>
+            <div class="hier-node enemy">
+              Enemy
+              <small>: Fighter</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cols-2" style="margin-top:14px;">
+      <div class="info-box">
+        <strong style="color:var(--text);">메서드 디스패치 우선순위</strong><br>
+        <code>obj.slot</code> 접근 시 Executor는 <em>메서드를 먼저</em> 탐색한 뒤 필드에 폴백합니다. Hero가 <code>take_damage</code>를 오버라이드하므로 <code>h.take_damage(raw)</code>는 항상 Hero 버전이 호출됩니다.
+      </div>
+      <div class="info-box">
+        <strong style="color:var(--text);">Super 호출</strong><br>
+        Hero.init은 <code>(Super.init "용사" 100 15 5)</code>로 Fighter 필드를 초기화. Hero.take_damage는 방어 처리 후 <code>(Super.take_damage adjusted)</code>를 호출해 실제 HP를 감소.
+      </div>
+    </div>
+  </section>
+
+  <!-- FIGHTER CLASS -->
+  <section id="fighter">
+    <div class="section-header">
+      <h2>Fighter 클래스</h2>
+      <span class="tag">Base Class</span>
+    </div>
+    <p class="section-desc">Hero와 Enemy가 공유하는 기반 클래스. 인스턴스를 직접 생성하지 않습니다.</p>
+
+    <div class="cols-2">
+      <div class="card card-frost">
+        <h4>필드 (init으로 설정)</h4>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>필드</th><th>초기값</th><th>설명</th></tr></thead>
+            <tbody>
+              <tr><td><code>name</code></td><td>파라미터</td><td>이름</td></tr>
+              <tr><td><code>hp</code></td><td>파라미터</td><td>현재 HP</td></tr>
+              <tr><td><code>maxhp</code></td><td>= hp</td><td>최대 HP</td></tr>
+              <tr><td><code>atk</code></td><td>파라미터</td><td>공격력</td></tr>
+              <tr><td><code>def_v</code></td><td>파라미터</td><td>방어력</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card card-frost">
+        <h4>메서드</h4>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>메서드</th><th>반환</th><th>설명</th></tr></thead>
+            <tbody>
+              <tr><td><code>init(name,hp,atk,def_v)</code></td><td>—</td><td>필드 초기화</td></tr>
+              <tr><td><code>is_alive()</code></td><td>bool</td><td><code>hp ≥ 1</code> 여부</td></tr>
+              <tr><td><code>take_damage(raw)</code></td><td>실제 피해량</td><td><code>max(1,raw)</code> 만큼 감소</td></tr>
+              <tr><td><code>heal(amount)</code></td><td>실제 회복량</td><td>MaxHP 초과 불가</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HERO CLASS -->
+  <section id="hero">
+    <div class="section-header">
+      <h2>Hero 클래스</h2>
+      <span class="tag">Player</span>
+    </div>
+    <p class="section-desc">Fighter를 상속. <code>take_damage</code>를 오버라이드하여 방어 자세 로직을 추가. 초기 파라미터 없음 — <code>(Hero)</code>로 생성.</p>
+
+    <div class="card card-violet">
+      <h4>추가 필드</h4>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>필드</th><th>초기값</th><th>설명</th></tr></thead>
+          <tbody>
+            <tr><td><code>lv</code></td><td>1</td><td>현재 레벨</td></tr>
+            <tr><td><code>exp</code></td><td>0</td><td>누적 EXP</td></tr>
+            <tr><td><code>expreq</code></td><td>30</td><td>레벨업 필요 EXP (레벨업마다 +20)</td></tr>
+            <tr><td><code>pot</code></td><td>3</td><td>보유 물약 수</td></tr>
+            <tr><td><code>special_ready</code></td><td>true</td><td>필살기 사용 가능 여부</td></tr>
+            <tr><td><code>is_defending</code></td><td>false</td><td>이번 턴 방어 자세 여부</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card card-violet" style="margin-top:14px;">
+      <h4>메서드 목록</h4>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>메서드</th><th>그룹</th><th>설명</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><code>take_damage(raw)</code></td>
+              <td><span style="color:var(--amber)">오버라이드</span></td>
+              <td><code>is_defending</code>이면 raw를 절반으로 줄인 뒤 <code>Super.take_damage</code> 호출</td>
+            </tr>
+            <tr>
+              <td><code>do_normal_attack(enemy)</code></td>
+              <td><span style="color:var(--frost)">전투</span></td>
+              <td><code>enemy.take_damage(ATK − enemy.def_v)</code></td>
+            </tr>
+            <tr>
+              <td><code>do_power_attack(enemy)</code></td>
+              <td><span style="color:var(--frost)">전투</span></td>
+              <td>25% 미스 체크 후 <code>ATK×2 − enemy.def_v</code> 피해</td>
+            </tr>
+            <tr>
+              <td><code>do_special(enemy)</code></td>
+              <td><span style="color:var(--violet)">필살기</span></td>
+              <td><code>special_ready</code> 체크 → ATK×3을 enemy.hp에 직접 감산 (DEF 무시). <code>special_ready = false</code></td>
+            </tr>
+            <tr>
+              <td><code>do_guard()</code></td>
+              <td><span style="color:var(--amber)">방어</span></td>
+              <td><code>is_defending = true</code>로 설정</td>
+            </tr>
+            <tr>
+              <td><code>use_potion()</code></td>
+              <td><span style="color:var(--emerald)">회복</span></td>
+              <td>pot &gt; 0이면 pot감소, <code>heal(40)</code> 호출</td>
+            </tr>
+            <tr>
+              <td><code>gain_exp(amount)</code></td>
+              <td><span style="color:var(--gold)">성장</span></td>
+              <td>exp 추가 후 레벨업 조건 체크 — Lv+1, MaxHP+20, ATK+3, DEF+1, expreq+20</td>
+            </tr>
+            <tr>
+              <td><code>reset_for_battle()</code></td>
+              <td><span style="color:var(--text2)">리셋</span></td>
+              <td><code>special_ready = true</code>, <code>is_defending = false</code> (전투 시작 시)</td>
+            </tr>
+            <tr>
+              <td><code>reset_turn()</code></td>
+              <td><span style="color:var(--text2)">리셋</span></td>
+              <td><code>is_defending = false</code> (매 턴 종료 시)</td>
+            </tr>
+            <tr>
+              <td><code>reset_all()</code></td>
+              <td><span style="color:var(--text2)">리셋</span></td>
+              <td>모든 스탯·플래그를 초기값으로 복원 (start_game에서 사용)</td>
+            </tr>
+            <tr>
+              <td><code>show_full()</code></td>
+              <td><span style="color:var(--text2)">UI</span></td>
+              <td>Lv, HP, ATK, DEF, 물약, 필살기 상태 출력</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <pre><span class="cm">-- 방어 오버라이드 핵심 로직</span>
+<span class="kw">(method</span> <span class="fn">take_damage</span> (<span class="field">raw</span>)
+  {
+    (<span class="kw">var</span> adjusted raw)
+    (<span class="kw">if</span> This.<span class="field">is_defending</span>
+      (<span class="kw">set!</span> adjusted (<span class="fn">max2</span> <span class="num">1</span> (/ raw <span class="num">2</span>))))
+    (<span class="kw">return</span> (<span class="cls">Super</span>.<span class="fn">take_damage</span> adjusted))
+  })</pre>
+  </section>
+
+  <!-- ENEMY CLASS -->
+  <section id="enemy">
+    <div class="section-header">
+      <h2>Enemy 클래스</h2>
+      <span class="tag">Monster</span>
+    </div>
+    <p class="section-desc">Fighter를 상속. <code>cur_enemy</code> 글로벌 인스턴스 하나를 재사용 — 새 층 시작 시 <code>set-field!</code>로 스탯을 덮어씁니다.</p>
+
+    <div class="cols-2">
+      <div class="card card-crimson">
+        <h4>추가 필드</h4>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>필드</th><th>설명</th></tr></thead>
+            <tbody>
+              <tr><td><code>reward</code></td><td>처치 시 EXP</td></tr>
+              <tr><td><code>skill_type</code></td><td>0–5, 스킬 분기 키</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card card-crimson">
+        <h4>메서드</h4>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>메서드</th><th>설명</th></tr></thead>
+            <tbody>
+              <tr><td><code>init(name,hp,atk,def_v,reward,skill_type)</code></td><td>필드 초기화</td></tr>
+              <tr><td><code>take_turn(hero)</code></td><td><code>skill_type</code>으로 전역 함수 디스패치</td></tr>
+              <tr><td><code>show_info()</code></td><td>이름·HP·ATK·DEF 출력</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px; background: var(--surface);">
+      <h4>skill_type 디스패치 표</h4>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>값</th><th>몬스터</th><th>호출 함수</th><th>행동</th></tr></thead>
+          <tbody>
+            <tr><td>0</td><td>슬라임</td><td><code>enemy_normal_atk</code></td><td>항상 일반 공격</td></tr>
+            <tr><td>1</td><td>고블린</td><td><code>enemy_quick_slash</code></td><td>연속 베기 (2타, 각 50% 데미지)</td></tr>
+            <tr><td>2</td><td>오크</td><td><code>enemy_heavy_or_normal</code></td><td>40% 강타, 60% 일반</td></tr>
+            <tr><td>3</td><td>스켈레톤</td><td><code>enemy_rally_or_normal</code></td><td>저체력+60% 시 회복, 나머지 일반</td></tr>
+            <tr><td>4</td><td>다크나이트</td><td><code>enemy_dark_slash</code></td><td>50% 강타, 50% 일반</td></tr>
+            <tr><td>5</td><td>드래곤 군주</td><td><code>enemy_boss_turn</code></td><td>복합 (회복·강타·연속·일반)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- FUNCTIONS -->
+  <section id="functions">
+    <div class="section-header">
+      <h2>전역 함수</h2>
+      <span class="tag">Code</span>
+    </div>
+
+    <div class="card card-amber">
+      <h3>유틸리티</h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>함수</th><th>설명</th><th>비고</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><code>mod(a, b)</code></td>
+              <td>재귀 나머지 연산</td>
+              <td>SLIP에 % 연산자 없음. 모듈러스 97로 최대 재귀 ~44회</td>
+            </tr>
+            <tr>
+              <td><code>max2(a, b)</code> / <code>min2(a, b)</code></td>
+              <td>2항 최대·최솟값</td>
+              <td>SLIP + 연산자는 2항만 지원</td>
+            </tr>
+            <tr>
+              <td><code>rng()</code></td>
+              <td>LCG 의사 난수 0–96</td>
+              <td>공식: <code>_seed = (31×_seed + 7) mod 97</code></td>
+            </tr>
+            <tr>
+              <td><code>rand_n(n)</code></td>
+              <td>0 ~ n−1 정수</td>
+              <td><code>mod(rng(), n)</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card card-crimson" style="margin-top:14px;">
+      <h3>몬스터 스킬 함수</h3>
+      <p style="font-size:13px; color:var(--text2); margin-bottom:10px;">Enemy.take_turn에서 <code>(e, h)</code> 시그니처로 호출됩니다. <code>h.take_damage(raw)</code>가 Hero의 오버라이드 버전을 디스패치합니다.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>함수</th><th>데미지 공식</th></tr></thead>
+          <tbody>
+            <tr><td><code>enemy_normal_atk(e, h)</code></td><td><code>max(1, e.atk − h.def_v)</code></td></tr>
+            <tr><td><code>enemy_heavy_atk(e, h)</code></td><td><code>max(1, e.atk − h.def_v) × 2</code></td></tr>
+            <tr><td><code>enemy_quick_slash(e, h)</code></td><td>기본 데미지의 절반 × 2타 (1타 후 생존 체크)</td></tr>
+            <tr><td><code>enemy_heavy_or_normal(e, h)</code></td><td><code>rng &gt; 59</code> → heavy, else normal</td></tr>
+            <tr><td><code>enemy_rally_or_normal(e, h)</code></td><td><code>hp &lt; maxhp/2 AND rng &gt; 39</code> → heal(20), else normal</td></tr>
+            <tr><td><code>enemy_dark_slash(e, h)</code></td><td><code>rng &gt; 49</code> → heavy, else normal</td></tr>
+            <tr><td><code>enemy_boss_turn(e, h)</code></td><td>저체력+rng&gt;84 회복(25) / rng&gt;74 heavy / rng&gt;49 slash / normal</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card card-gold" style="margin-top:14px;">
+      <h3>게임 로직 함수</h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>함수</th><th>역할</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><code>spawn_enemy(floor)</code></td>
+              <td>cur_enemy 필드 갱신 + <code>hero.reset_for_battle()</code> 호출. 5층은 고정 보스 스탯 설정</td>
+            </tr>
+            <tr>
+              <td><code>show_floor_header(floor)</code></td>
+              <td>층 정보 + cur_enemy.show_info() 출력</td>
+            </tr>
+            <tr>
+              <td><code>do_action(type)</code></td>
+              <td>메인 턴 루프. type 0–4를 Hero 메서드로 디스패치 → 반격 → 리셋 → 사망·승리 판정</td>
+            </tr>
+            <tr>
+              <td><code>start_game()</code></td>
+              <td><code>hero.reset_all()</code> + 시드 리셋 + 1층 spawn</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- GAME STATE -->
+  <section id="gamestate">
+    <div class="section-header">
+      <h2>게임 상태 변수</h2>
+      <span class="tag">Code</span>
+    </div>
+    <p class="section-desc">클래스 인스턴스와 별개로 전역에 보관되는 게임 진행 상태.</p>
+    <div class="card card-amber">
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>변수</th><th>초기값</th><th>설명</th></tr></thead>
+          <tbody>
+            <tr><td><code>hero</code></td><td><code>(Hero)</code></td><td>플레이어 인스턴스 (전체 생애 재사용)</td></tr>
+            <tr><td><code>cur_enemy</code></td><td><code>(Enemy "???" 1 1 0 0 0)</code></td><td>현재 적 인스턴스 (층마다 필드만 교체)</td></tr>
+            <tr><td><code>game_active</code></td><td>false</td><td>전투 진행 중 여부</td></tr>
+            <tr><td><code>game_floor</code></td><td>0</td><td>현재 층 (1–5)</td></tr>
+            <tr><td><code>game_over</code></td><td>false</td><td>플레이어 사망 플래그</td></tr>
+            <tr><td><code>game_won</code></td><td>false</td><td>던전 클리어 플래그</td></tr>
+            <tr><td><code>cur_turn</code></td><td>1</td><td>현재 층의 턴 카운터</td></tr>
+            <tr><td><code>enames[5]</code></td><td>슬라임…다크나이트</td><td>몬스터 이름 배열 (인덱스 = eskill 대응)</td></tr>
+            <tr><td><code>eskill[5]</code></td><td>0,1,2,3,4</td><td>skill_type 배열</td></tr>
+            <tr><td><code>_seed</code></td><td>73</td><td>LCG 시드 (start_game마다 73으로 리셋)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- TURN FLOW -->
+  <section id="turnflow">
+    <div class="section-header">
+      <h2>턴 흐름</h2>
+      <span class="tag">Code</span>
+    </div>
+    <p class="section-desc"><code>do_action(type)</code> 내부의 실행 순서. 매 커맨드 호출마다 이 흐름이 진행됩니다.</p>
+
+    <div class="flow">
+      <div class="flow-step">
+        <div class="flow-left">
+          <div class="flow-dot" style="background:rgba(75,124,188,0.15);border-color:var(--frost);color:var(--frost)">1</div>
+          <div class="flow-line"></div>
+        </div>
+        <div class="flow-content">
+          <div class="flow-title">게임 활성 체크</div>
+          <div class="flow-desc"><code>game_active</code>가 false이면 안내 메시지 출력 후 즉시 반환.</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-left">
+          <div class="flow-dot" style="background:rgba(200,168,72,0.12);border-color:var(--gold);color:var(--gold)">2</div>
+          <div class="flow-line"></div>
+        </div>
+        <div class="flow-content">
+          <div class="flow-title">플레이어 행동 실행</div>
+          <div class="flow-desc">action_type에 따라 Hero 메서드 호출.<br>0=<code>do_normal_attack</code> · 1=<code>do_power_attack</code> · 2=<code>use_potion</code> · 3=<code>do_special</code> · 4=<code>do_guard</code></div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-left">
+          <div class="flow-dot" style="background:rgba(181,56,56,0.12);border-color:var(--crimson);color:var(--crimson)">3</div>
+          <div class="flow-line"></div>
+        </div>
+        <div class="flow-content">
+          <div class="flow-title">몬스터 반격</div>
+          <div class="flow-desc"><code>cur_enemy.is_alive()</code>가 true일 때만 <code>cur_enemy.take_turn(hero)</code> 호출. 플레이어 행동으로 몬스터가 사망했다면 반격 없음.</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-left">
+          <div class="flow-dot" style="background:rgba(117,85,165,0.12);border-color:var(--violet);color:var(--violet)">4</div>
+          <div class="flow-line"></div>
+        </div>
+        <div class="flow-content">
+          <div class="flow-title">턴 상태 리셋</div>
+          <div class="flow-desc"><code>hero.reset_turn()</code>으로 <code>is_defending = false</code>. 이후 상태 출력.</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-left">
+          <div class="flow-dot" style="background:rgba(58,136,88,0.12);border-color:var(--emerald);color:var(--emerald)">5</div>
+          <div class="flow-line"></div>
+        </div>
+        <div class="flow-content">
+          <div class="flow-title">플레이어 사망 판정</div>
+          <div class="flow-desc"><code>not hero.is_alive()</code> → game_over, game_active=false. 최종 레벨 출력 후 반환.</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-left">
+          <div class="flow-dot" style="background:rgba(200,168,72,0.12);border-color:var(--gold);color:var(--gold)">6</div>
+          <div class="flow-line" style="background:transparent;"></div>
+        </div>
+        <div class="flow-content">
+          <div class="flow-title">몬스터 사망 판정</div>
+          <div class="flow-desc"><code>not cur_enemy.is_alive()</code> → EXP 지급·레벨업 체크·물약 드롭 체크 → game_floor+1 → 5층 초과 시 클리어, 아니면 <code>spawn_enemy</code>·<code>show_floor_header</code>.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="warn-box" style="max-width:480px;">
+      <strong style="color:var(--text);">설계 포인트</strong> — Enemy 인스턴스를 매번 새로 생성하지 않고 <code>set-field!</code>로 필드만 교체하는 이유: SLIP에서 인스턴스 재생성 후 전역 변수 참조를 갱신하려면 새 <code>var</code> 선언이 필요한데, SLIP의 <code>var</code>는 재선언을 허용하지 않습니다.
+    </div>
+  </section>
+
+</main>
+
+<script>
+  const sections = document.querySelectorAll('section[id]');
+  const navLinks = document.querySelectorAll('.nav a[href^="#"]');
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        navLinks.forEach(a => {
+          a.classList.toggle('active', a.getAttribute('href') === '#' + id);
+        });
+      }
+    });
+  }, { rootMargin: '-10% 0px -80% 0px', threshold: 0 });
+
+  sections.forEach(s => observer.observe(s));
+</script>

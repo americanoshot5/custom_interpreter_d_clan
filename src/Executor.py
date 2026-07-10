@@ -24,8 +24,19 @@ _UNARY: dict[str, Callable[[RuntimeValue], RuntimeValue]] = {
     "!":   _op.not_,
 }
 
+def _str_add(a: "RuntimeValue", b: "RuntimeValue") -> "RuntimeValue":
+    """문자열을 포함할 때는 연결, 그 외에는 산술 덧셈."""
+    if isinstance(a, str) or isinstance(b, str):
+        def _fmt(v: "RuntimeValue") -> str:
+            if isinstance(v, float) and v.is_integer():
+                return str(int(v))
+            return str(v)
+        return _fmt(a) + _fmt(b)
+    return _op.add(a, b)
+
+
 _BINARY: dict[str, Callable[[RuntimeValue, RuntimeValue], RuntimeValue]] = {
-    "+":   _op.add,
+    "+":   _str_add,
     "-":   _op.sub,
     "*":   _op.mul,
     "/":   _op.truediv,  # ZeroDivisionError 는 자연스럽게 전파됩니다
