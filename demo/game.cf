@@ -1,0 +1,492 @@
+(print "================================================")
+(print "           *** SLIP DUNGEON RPG ***")
+(print "================================================")
+(print "")
+(print "  (start_game)   시작 / 재시작")
+(print "  (attack)       보통 공격")
+(print "  (power)        강타  [약 2배, 25% 미스]")
+(print "  (special)      필살기 [3배 고정, 전투당 1회]")
+(print "  (guard)        방어  [이번 턴 피해 50% 감소]")
+(print "  (potion)       물약  [HP +40]")
+(print "  (status)       상태 확인")
+(print "  exit           종료")
+(print "================================================")
+(print "")
+
+(func mod (a b)
+  (if (< a b)
+    (return a)
+    (return (mod (- a b) b))))
+
+(func max2 (a b)
+  (if (> a b) (return a) (return b)))
+
+(func min2 (a b)
+  (if (< a b) (return a) (return b)))
+
+(var _seed 73)
+
+(func rng ()
+  {
+    (set! _seed (mod (+ (* 31 _seed) 7) 97))
+    (return _seed)
+  })
+
+(func rand_n (n)
+  (return (mod (rng) n)))
+
+(class Fighter {
+  (method init (name hp atk def_v)
+    {
+      (set-field! This name name)
+      (set-field! This hp hp)
+      (set-field! This maxhp hp)
+      (set-field! This atk atk)
+      (set-field! This def_v def_v)
+    })
+  (method is_alive ()
+    { (return (not (< This.hp 1))) })
+  (method take_damage (raw)
+    {
+      (var actual (max2 1 raw))
+      (set-field! This hp (- This.hp actual))
+      (return actual)
+    })
+  (method heal (amount)
+    {
+      (var room (- This.maxhp This.hp))
+      (var actual (min2 amount room))
+      (set-field! This hp (+ This.hp actual))
+      (return actual)
+    })
+})
+
+(class Hero : Fighter {
+  (method init ()
+    {
+      (Super.init "용사" 100 15 5)
+      (set-field! This lv 1)
+      (set-field! This exp 0)
+      (set-field! This expreq 30)
+      (set-field! This pot 3)
+      (set-field! This special_ready true)
+      (set-field! This is_defending false)
+    })
+  (method take_damage (raw)
+    {
+      (var adjusted raw)
+      (if This.is_defending
+        (set! adjusted (max2 1 (/ raw 2))))
+      (return (Super.take_damage adjusted))
+    })
+  (method do_normal_attack (enemy)
+    {
+      (var raw (- This.atk enemy.def_v))
+      (var dmg (enemy.take_damage raw))
+      (print "  나 > 공격!")
+      (print "  데미지:")
+      (print dmg)
+    })
+  (method do_power_attack (enemy)
+    {
+      (if (> (rng) 74)
+        {
+          (print "  나 > 강타! 빗나갔다!")
+          (return 0)
+        })
+      (var raw (+ (- This.atk enemy.def_v) This.atk))
+      (var dmg (enemy.take_damage (max2 1 raw)))
+      (print "  나 > 강타!")
+      (print "  데미지:")
+      (print dmg)
+    })
+  (method do_special (enemy)
+    {
+      (if (not This.special_ready)
+        {
+          (print "  나 > 필살기 충전 중... 사용 불가!")
+          (return 0)
+        })
+      (set-field! This special_ready false)
+      (var dmg (* This.atk 3))
+      (set-field! enemy hp (- enemy.hp dmg))
+      (print "  나 > ★ 천둥 일격! ★")
+      (print "  필살기 데미지 (DEF 무시):")
+      (print dmg)
+    })
+  (method do_guard ()
+    {
+      (set-field! This is_defending true)
+      (print "  나 > 방어 자세!")
+      (print "  이번 공격 피해 50% 감소!")
+    })
+  (method use_potion ()
+    {
+      (if (> This.pot 0)
+        {
+          (set-field! This pot (- This.pot 1))
+          (var healed (This.heal 40))
+          (print "  나 > 물약 사용! HP:")
+          (print This.hp)
+        }
+        (print "  나 > 물약이 없다!"))
+    })
+  (method gain_exp (amount)
+    {
+      (set-field! This exp (+ This.exp amount))
+      (print "  EXP +")
+      (print amount)
+      (if (> This.exp This.expreq)
+        {
+          (set-field! This lv (+ This.lv 1))
+          (set-field! This exp (- This.exp This.expreq))
+          (set-field! This expreq (+ This.expreq 20))
+          (set-field! This maxhp (+ This.maxhp 20))
+          (set-field! This hp (min2 (+ This.hp 20) This.maxhp))
+          (set-field! This atk (+ This.atk 3))
+          (set-field! This def_v (+ This.def_v 1))
+          (print "")
+          (print "  ★ LEVEL UP ★")
+          (print "  레벨:")
+          (print This.lv)
+          (print "  MaxHP+20 / ATK+3 / DEF+1")
+        })
+    })
+  (method reset_for_battle ()
+    {
+      (set-field! This special_ready true)
+      (set-field! This is_defending false)
+    })
+  (method reset_turn ()
+    { (set-field! This is_defending false) })
+  (method reset_all ()
+    {
+      (set-field! This hp 100)
+      (set-field! This maxhp 100)
+      (set-field! This atk 15)
+      (set-field! This def_v 5)
+      (set-field! This lv 1)
+      (set-field! This exp 0)
+      (set-field! This expreq 30)
+      (set-field! This pot 3)
+      (set-field! This special_ready true)
+      (set-field! This is_defending false)
+    })
+  (method show_full ()
+    {
+      (print "  [나]  Lv:")
+      (print This.lv)
+      (print "  HP:")
+      (print This.hp)
+      (print "  ATK:")
+      (print This.atk)
+      (print "  DEF:")
+      (print This.def_v)
+      (print "  물약:")
+      (print This.pot)
+      (if This.special_ready
+        (print "  필살기: 준비됨")
+        (print "  필살기: 소진됨"))
+    })
+})
+
+(func enemy_normal_atk (e h)
+  {
+    (var raw (max2 1 (- e.atk h.def_v)))
+    (var actual (h.take_damage raw))
+    (print "  적 > 일반 공격!")
+    (print "  데미지:")
+    (print actual)
+  })
+
+(func enemy_heavy_atk (e h)
+  {
+    (var raw (* (max2 1 (- e.atk h.def_v)) 2))
+    (var actual (h.take_damage raw))
+    (print "  적 > 강한 일격!")
+    (print "  데미지:")
+    (print actual)
+  })
+
+(func enemy_quick_slash (e h)
+  {
+    (var base (max2 1 (- e.atk h.def_v)))
+    (var hit (max2 1 (/ base 2)))
+    (var dmg1 (h.take_damage hit))
+    (print "  적 > 연속 베기!")
+    (print "  1타:")
+    (print dmg1)
+    (if (h.is_alive)
+      {
+        (var dmg2 (h.take_damage hit))
+        (print "  2타:")
+        (print dmg2)
+      })
+  })
+
+(func enemy_heavy_or_normal (e h)
+  (if (> (rng) 59)
+    (enemy_heavy_atk e h)
+    (enemy_normal_atk e h)))
+
+(func enemy_rally_or_normal (e h)
+  {
+    (var low (< e.hp (/ e.maxhp 2)))
+    (if (and low (> (rng) 39))
+      {
+        (var healed (e.heal 20))
+        (print "  적 > 기력을 되찾았다!")
+        (print "  회복:")
+        (print healed)
+      }
+      (enemy_normal_atk e h))
+  })
+
+(func enemy_dark_slash (e h)
+  (if (> (rng) 49)
+    (enemy_heavy_atk e h)
+    (enemy_normal_atk e h)))
+
+(func enemy_boss_turn (e h)
+  {
+    (var roll (rng))
+    (var low (< e.hp (/ e.maxhp 2)))
+    (if (and low (> roll 84))
+      {
+        (var healed (e.heal 25))
+        (print "  드래곤 > 고대의 힘으로 회복!")
+        (print "  회복:")
+        (print healed)
+      }
+      (if (> roll 74)
+        (enemy_heavy_atk e h)
+        (if (> roll 49)
+          (enemy_quick_slash e h)
+          (enemy_normal_atk e h))))
+  })
+
+(class Enemy : Fighter {
+  (method init (name hp atk def_v reward skill_type)
+    {
+      (Super.init name hp atk def_v)
+      (set-field! This reward reward)
+      (set-field! This skill_type skill_type)
+    })
+  (method take_turn (hero)
+    {
+      (if (= This.skill_type 0)
+        (enemy_normal_atk This hero)
+        (if (= This.skill_type 1)
+          (enemy_quick_slash This hero)
+          (if (= This.skill_type 2)
+            (enemy_heavy_or_normal This hero)
+            (if (= This.skill_type 3)
+              (enemy_rally_or_normal This hero)
+              (if (= This.skill_type 4)
+                (enemy_dark_slash This hero)
+                (enemy_boss_turn This hero))))))
+    })
+  (method show_info ()
+    {
+      (print "  [적]")
+      (print This.name)
+      (print "  HP:")
+      (print This.hp)
+      (print "  ATK:")
+      (print This.atk)
+      (print "  DEF:")
+      (print This.def_v)
+    })
+})
+
+(var hero (Hero))
+(var cur_enemy (Enemy "???" 1 1 0 0 0))
+(var game_active false)
+(var game_floor  0)
+(var game_over   false)
+(var game_won    false)
+(var cur_turn    1)
+
+(var enames [5])
+(set-index! enames 0 "슬라임")
+(set-index! enames 1 "고블린")
+(set-index! enames 2 "오크")
+(set-index! enames 3 "스켈레톤")
+(set-index! enames 4 "다크나이트")
+
+(var eskill [5])
+(set-index! eskill 0 0)
+(set-index! eskill 1 1)
+(set-index! eskill 2 2)
+(set-index! eskill 3 3)
+(set-index! eskill 4 4)
+
+(func spawn_enemy (floor)
+  {
+    (if (= floor 5)
+      {
+        (set-field! cur_enemy name "드래곤 군주")
+        (set-field! cur_enemy hp 130)
+        (set-field! cur_enemy maxhp 130)
+        (set-field! cur_enemy atk 25)
+        (set-field! cur_enemy def_v 8)
+        (set-field! cur_enemy reward 60)
+        (set-field! cur_enemy skill_type 5)
+      }
+      {
+        (var idx (rand_n 5))
+        (set-field! cur_enemy name enames[idx])
+        (set-field! cur_enemy hp (+ (+ 20 (* floor 8)) (rand_n 8)))
+        (set-field! cur_enemy maxhp cur_enemy.hp)
+        (set-field! cur_enemy atk (+ (+ 5 floor) (rand_n 4)))
+        (set-field! cur_enemy def_v (rand_n (+ floor 2)))
+        (set-field! cur_enemy reward (+ 10 (* floor 4)))
+        (set-field! cur_enemy skill_type eskill[idx])
+      })
+    (hero.reset_for_battle)
+  })
+
+(func show_floor_header (floor)
+  {
+    (print "")
+    (print "================================================")
+    (print "  층:")
+    (print floor)
+    (if (= floor 5)
+      (print "  *** 보스 등장! ***")
+      (print "  몬스터가 나타났다!"))
+    (print "================================================")
+    (cur_enemy.show_info)
+    (print "")
+    (print "  (attack)/(power)/(special)/(guard)/(potion)")
+  })
+
+(func do_action (action_type)
+  {
+    (if (not game_active)
+      {
+        (if game_won
+          (print "(start_game) 으로 다시 시작하세요.")
+          (if game_over
+            (print "(start_game) 으로 다시 시작하세요.")
+            (print "(start_game) 을 먼저 실행하세요.")))
+        (return 0)
+      })
+
+    (print "")
+    (print "-- 턴")
+    (print cur_turn)
+    (set! cur_turn (+ cur_turn 1))
+
+    (if (= action_type 0)
+      (hero.do_normal_attack cur_enemy)
+      (if (= action_type 1)
+        (hero.do_power_attack cur_enemy)
+        (if (= action_type 2)
+          (hero.use_potion)
+          (if (= action_type 3)
+            (hero.do_special cur_enemy)
+            (hero.do_guard)))))
+
+    (if (cur_enemy.is_alive)
+      (cur_enemy.take_turn hero))
+
+    (hero.reset_turn)
+
+    (print "")
+    (hero.show_full)
+    (cur_enemy.show_info)
+
+    (if (not (hero.is_alive))
+      {
+        (print "")
+        (print "  ... 쓰러졌다 ...")
+        (set! game_active false)
+        (set! game_over  true)
+        (print "  게임 오버! 도달 층:")
+        (print game_floor)
+        (print "  최종 레벨:")
+        (print hero.lv)
+        (return 0)
+      })
+
+    (if (not (cur_enemy.is_alive))
+      {
+        (print "")
+        (print "  >>> 승리! <<<")
+        (hero.gain_exp cur_enemy.reward)
+        (if (> (rng) 48)
+          {
+            (set-field! hero pot (+ hero.pot 1))
+            (print "  물약 획득! 남은 물약:")
+            (print hero.pot)
+          })
+
+        (set! game_floor (+ game_floor 1))
+
+        (if (> game_floor 5)
+          {
+            (set! game_active false)
+            (set! game_won   true)
+            (print "")
+            (print "================================================")
+            (print "  ★★★  던전 클리어!  ★★★")
+            (print "  최종 레벨:")
+            (print hero.lv)
+            (print "  남은 HP:")
+            (print hero.hp)
+            (print "================================================")
+          }
+          {
+            (set! cur_turn 1)
+            (spawn_enemy game_floor)
+            (show_floor_header game_floor)
+          })
+
+        (return 0)
+      })
+
+    (print "")
+    (print "  (attack)/(power)/(special)/(guard)/(potion)")
+  })
+
+(func start_game ()
+  {
+    (hero.reset_all)
+    (set! _seed    73)
+    (set! game_active true)
+    (set! game_floor  1)
+    (set! game_over   false)
+    (set! game_won    false)
+    (set! cur_turn    1)
+
+    (print "")
+    (print "================================================")
+    (print "  용사여, 던전을 정복하라!")
+    (print "  HP: 100  ATK: 15  DEF: 5  물약: 3")
+    (print "================================================")
+
+    (spawn_enemy 1)
+    (show_floor_header 1)
+  })
+
+(func attack ()
+  (do_action 0))
+
+(func power ()
+  (do_action 1))
+
+(func potion ()
+  (do_action 2))
+
+(func special ()
+  (do_action 3))
+
+(func guard ()
+  (do_action 4))
+
+(func status ()
+  {
+    (hero.show_full)
+    (cur_enemy.show_info)
+  })

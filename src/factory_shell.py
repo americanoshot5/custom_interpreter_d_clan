@@ -11,7 +11,7 @@ from Assembler import assemble
 from Checker import StaticChecker, check
 from common import ExecuteError, LanguageError, Program, RuntimeValue, Stmt
 from Executor import SExpressionExecutor
-from prompt_shell import wrap_bare_statement
+from prompt_shell import is_balanced, wrap_bare_statement
 from Tokenizer import tokenize
 
 
@@ -425,9 +425,86 @@ def run_prompt_mode(
         buffer.append(line)
 
 
+def run_game_mode(
+    path: str,
+    read_line: Callable[[], str] = input,
+    write_output: Callable[[str], None] = print,
+    on_prompt: Callable[[str], None] | None = None,
+    prompt: str = "game> ",
+) -> int:
+    """게임 파일을 사전 로드한 뒤 대화형 REPL을 실행한다.
+
+    균형 잡힌 단일 식은 빈 줄 없이 즉시 실행한다.
+    """
+    source_path = Path(path)
+    try:
+        source = source_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        write_output(f"File not found: {source_path}")
+        return 1
+    except OSError as error:
+        write_output(f"Could not read file '{source_path}': {error}")
+        return 1
+
+    checker = StaticChecker()
+    executor = SExpressionExecutor()
+
+    try:
+        tokens = tokenize(source)
+        program = assemble(tokens)
+        checker.check(program)
+        executor.execute(program)
+    except LanguageError as error:
+        write_output(f"Error: {error}")
+        return 1
+
+    buffer: list[str] = []
+
+    def _run(text: str) -> None:
+        wrapped = wrap_bare_statement(text, tokenize, assemble)
+        saved = checker.checkpoint()
+        try:
+            toks = tokenize(wrapped)
+            prog = assemble(toks)
+            checker.check(prog)
+            result = executor.execute(prog)
+        except LanguageError as error:
+            checker.restore(saved)
+            write_output(f"Error: {error}")
+        else:
+            if result is not None:
+                write_output(str(result))
+
+    while True:
+        if on_prompt is not None:
+            on_prompt("...  " if buffer else prompt)
+        try:
+            line = read_line()
+        except EOFError:
+            return 0
+
+        if not buffer:
+            stripped = line.strip()
+            if stripped.lower() in {"exit", "quit"}:
+                return 0
+            if stripped == "":
+                continue
+            # 균형 잡힌 단일 식 → 즉시 실행 (빈 줄 불필요)
+            if is_balanced(stripped):
+                _run(stripped)
+                continue
+
+        if line.strip() == "":
+            _run("\n".join(buffer))
+            buffer = []
+            continue
+
+        buffer.append(line)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    usage = "Usage: factory_shell.py <run|debug|prompt> [source-file]"
+    usage = "Usage: factory_shell.py <run|debug|prompt|play> [source-file]"
 
     if not args:
         print(usage)
@@ -444,7 +521,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(text, end="", flush=True)
 
         return run_prompt_mode(read_line=input, write_output=print, on_prompt=on_prompt)
-    if mode not in {"run", "debug", "prompt"} and not rest:
+    if mode == "play" and len(rest) == 1:
+        def on_prompt_play(text: str) -> None:
+            print(text, end="", flush=True)
+
+        return run_game_mode(rest[0], read_line=input, write_output=print, on_prompt=on_prompt_play)
+    if mode not in {"run", "debug", "prompt", "play"} and not rest:
         # 하위 호환: 서브커맨드 없이 파일 경로 하나만 주면 run 모드로 처리한다.
         return run_file_mode(mode)
 
