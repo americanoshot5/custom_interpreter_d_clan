@@ -1,0 +1,259 @@
+(print "================================================")
+(print "           *** SLIP DUNGEON RPG ***")
+(print "================================================")
+(print "")
+
+(func mod (a b)
+  (if (< a b)
+    (return a)
+    (return (mod (- a b) b))))
+
+(func max2 (a b)
+  (if (> a b) (return a) (return b)))
+
+(func min2 (a b)
+  (if (< a b) (return a) (return b)))
+
+(var _seed 73)
+
+(func rng ()
+  {
+    (set! _seed (mod (+ (* 31 _seed) 7) 97))
+    (return _seed)
+  })
+
+(func rand_n (n)
+  (return (mod (rng) n)))
+
+(var p_hp     100)
+(var p_maxhp  100)
+(var p_atk    15)
+(var p_def    5)
+(var p_lv     1)
+(var p_exp    0)
+(var p_expreq 30)
+(var p_pot    3)
+(var p_alive  true)
+
+(var e_name   "???")
+(var e_hp     0)
+(var e_maxhp  0)
+(var e_atk    0)
+(var e_def    0)
+(var e_reward 0)
+
+(var enames [5])
+(set-index! enames 0 "슬라임")
+(set-index! enames 1 "고블린")
+(set-index! enames 2 "오크")
+(set-index! enames 3 "스켈레톤")
+(set-index! enames 4 "다크나이트")
+
+(func check_levelup ()
+  (if (> p_exp p_expreq)
+    {
+      (set! p_lv     (+ p_lv 1))
+      (set! p_exp    (- p_exp p_expreq))
+      (set! p_expreq (+ p_expreq 20))
+      (set! p_maxhp  (+ p_maxhp 20))
+      (set! p_hp     (min2 (+ p_hp 20) p_maxhp))
+      (set! p_atk    (+ p_atk 3))
+      (set! p_def    (+ p_def 1))
+      (print "")
+      (print "  ★ LEVEL UP ★")
+      (print "  새 레벨:")
+      (print p_lv)
+      (print "  MaxHP+20 / ATK+3 / DEF+1")
+    }))
+
+(func spawn_enemy (floor)
+  (if (= floor 5)
+    {
+      (set! e_name   "드래곤 군주")
+      (set! e_hp     130)
+      (set! e_maxhp  130)
+      (set! e_atk    25)
+      (set! e_def    8)
+      (set! e_reward 60)
+    }
+    {
+      (var idx (rand_n 5))
+      (set! e_name   enames[idx])
+      (set! e_hp     (+ (+ 20 (* floor 8)) (rand_n 8)))
+      (set! e_maxhp  e_hp)
+      (set! e_atk    (+ (+ 5 floor) (rand_n 4)))
+      (set! e_def    (rand_n (+ floor 2)))
+      (set! e_reward (+ 10 (* floor 4)))
+    }))
+
+(func print_status ()
+  {
+    (print "  [나]  HP:")
+    (print p_hp)
+    (print "  [적]  HP:")
+    (print e_hp)
+  })
+
+(func do_turn (turn_num)
+  {
+    (print "")
+    (print "-- 턴")
+    (print turn_num)
+
+    (var action 0)
+    (if (and (< (* p_hp 3) p_maxhp) (> p_pot 0))
+      (set! action 2)
+      (if (> (rand_n 100) 74)
+        (set! action 1)
+        (set! action 0)))
+
+    (if (= action 2)
+      {
+        (set! p_pot (- p_pot 1))
+        (set! p_hp  (min2 (+ p_hp 40) p_maxhp))
+        (print "  나 > 물약 사용! 회복 후 HP:")
+        (print p_hp)
+      }
+      {
+        (var is_power (= action 1))
+        (var miss false)
+        (if is_power
+          (if (> (rand_n 100) 74)
+            (set! miss true)))
+
+        (if miss
+          (print "  나 > 강타... 빗나갔다!")
+          {
+            (var dmg (- p_atk e_def))
+            (if is_power
+              (set! dmg (+ dmg p_atk)))
+            (set! dmg (max2 1 dmg))
+            (set! e_hp (- e_hp dmg))
+            (if is_power
+              (print "  나 > 강타!")
+              (print "  나 > 공격!"))
+            (print "  데미지:")
+            (print dmg)
+          })
+      })
+
+    (if (not (< e_hp 1))
+      {
+        (var edmg (max2 1 (- e_atk p_def)))
+        (if (> (rand_n 100) 69)
+          {
+            (set! edmg (+ edmg edmg))
+            (print "  적 > 크리티컬!")
+          }
+          (print "  적 > 반격!"))
+        (set! p_hp (- p_hp edmg))
+        (print "  데미지:")
+        (print edmg)
+      })
+
+    (print_status)
+  })
+
+(func do_floor (floor)
+  {
+    (print "")
+    (print "================================================")
+    (print "  층:")
+    (print floor)
+    (if (= floor 5)
+      (print "  *** 보스 등장! ***")
+      (print "  몬스터가 나타났다!"))
+    (print "================================================")
+
+    (spawn_enemy floor)
+
+    (print "")
+    (print "  적:")
+    (print e_name)
+    (print "  HP:")
+    (print e_hp)
+    (print "  ATK:")
+    (print e_atk)
+    (print "  DEF:")
+    (print e_def)
+
+    (var won false)
+    (for t 1 41
+      (if (and (not won) p_alive)
+        {
+          (do_turn t)
+
+          (if (< e_hp 1)
+            {
+              (print "")
+              (print "  >>> 승리! <<<")
+              (set! p_exp (+ p_exp e_reward))
+              (print "  EXP +")
+              (print e_reward)
+              (check_levelup)
+              (if (> (rand_n 100) 49)
+                {
+                  (set! p_pot (+ p_pot 1))
+                  (print "  물약 획득! 남은 물약:")
+                  (print p_pot)
+                })
+              (set! won true)
+            })
+
+          (if (< p_hp 1)
+            {
+              (set! p_alive false)
+              (set! won true)
+            })
+        }))
+
+    (if (not p_alive)
+      {
+        (print "")
+        (print "  ... 쓰러졌다...")
+      })
+  })
+
+(print "[시작 능력치]")
+(print "  HP:")
+(print p_hp)
+(print "  ATK:")
+(print p_atk)
+(print "  DEF:")
+(print p_def)
+(print "  물약:")
+(print p_pot)
+(print "")
+(print "용사여, 던전을 정복하라!")
+
+(for floor 1 6
+  (if p_alive
+    (do_floor floor)))
+
+(print "")
+(print "================================================")
+(if p_alive
+  {
+    (print "")
+    (print "  ★★★  던전 클리어!  ★★★")
+    (print "")
+    (print "  최종 레벨:")
+    (print p_lv)
+    (print "  남은 HP:")
+    (print p_hp)
+    (print "  남은 물약:")
+    (print p_pot)
+  }
+  {
+    (print "")
+    (print "  --- 게임 오버 ---")
+    (print "")
+    (print "  도달 레벨:")
+    (print p_lv)
+    (print "  획득 EXP:")
+    (print p_exp)
+  })
+(print "")
+(print "================================================")
+(print "       END  -  SLIP DUNGEON RPG")
+(print "================================================")
