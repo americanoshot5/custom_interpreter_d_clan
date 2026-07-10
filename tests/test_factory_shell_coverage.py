@@ -32,6 +32,7 @@ from common import (
     Program,
     SourceLocation,
 )
+import factory_shell
 from factory_shell import (
     DebugCommand,
     DebugSession,
@@ -584,3 +585,67 @@ def test_main_invalid_mode(capsys):
     assert exit_code == 2
     captured = capsys.readouterr()
     assert "usage" in captured.out.lower()
+
+
+# ── Optimizer 파이프라인 통합 ────────────────────────────────────────────────
+# Optimizer.optimize()가 구현만 되고 실제 실행 경로(run_file_mode 등)에
+# 연결이 안 되어 있던 회귀를 방지하기 위한 테스트. 각 실행 경로에서
+# optimize()가 실제로 호출되는지, 그리고 상수 접기 결과가 정상적으로
+# 실행에 반영되는지를 확인한다.
+
+def test_run_file_mode_calls_optimize(tmp_path):
+    source_file = tmp_path / "program.cf"
+    source_file.write_text("(print (+ 1 (* 2 3)))", encoding="utf-8")
+    outputs: list[str] = []
+
+    with mock.patch("factory_shell.optimize", wraps=factory_shell.optimize) as spy:
+        exit_code = run_file_mode(str(source_file), write_output=outputs.append)
+
+    assert exit_code == 0
+    assert outputs == ["7.0"]
+    spy.assert_called_once()
+
+
+def test_run_debug_mode_calls_optimize():
+    outputs: list[str] = []
+
+    with mock.patch("factory_shell.optimize", wraps=factory_shell.optimize) as spy:
+        exit_code = run_debug_mode(
+            "(print (+ 1 (* 2 3)))",
+            commands=["continue"],
+            write_output=outputs.append,
+        )
+
+    assert exit_code == 0
+    spy.assert_called_once()
+
+
+def test_run_prompt_mode_calls_optimize():
+    outputs: list[str] = []
+    lines = iter(["(+ 1 (* 2 3))", "", "exit"])
+
+    with mock.patch("factory_shell.optimize", wraps=factory_shell.optimize) as spy:
+        exit_code = run_prompt_mode(read_line=lambda: next(lines), write_output=outputs.append)
+
+    assert exit_code == 0
+    assert outputs == ["7.0"]
+    spy.assert_called_once()
+
+
+def test_run_game_mode_calls_optimize_for_preload_and_each_command(tmp_path):
+    source_file = tmp_path / "game.cf"
+    source_file.write_text("(var total 0)", encoding="utf-8")
+    outputs: list[str] = []
+    lines = iter(["(+ 1 (* 2 3))", "", "exit"])
+
+    with mock.patch("factory_shell.optimize", wraps=factory_shell.optimize) as spy:
+        exit_code = run_game_mode(
+            str(source_file),
+            read_line=lambda: next(lines),
+            write_output=outputs.append,
+        )
+
+    assert exit_code == 0
+    assert outputs == ["7.0"]
+    # 1회: 프리로드, 1회: REPL에서 입력한 식
+    assert spy.call_count == 2

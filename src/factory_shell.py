@@ -11,6 +11,7 @@ from Assembler import assemble
 from Checker import StaticChecker, check
 from common import ExecuteError, LanguageError, Program, RuntimeValue, Stmt
 from Executor import SExpressionExecutor
+from Optimizer import optimize
 from prompt_shell import is_balanced, wrap_bare_statement
 from Tokenizer import tokenize
 
@@ -292,7 +293,7 @@ def _run_pipeline(source: str) -> Program:
     tokens = tokenize(source)
     program = assemble(tokens)
     check(program)
-    return program
+    return optimize(program)
 
 
 def _emit_captured_stdout(captured: str, write_output: Callable[[str], None]) -> None:
@@ -413,6 +414,7 @@ def run_prompt_mode(
                 tokens = tokenize(text)
                 program = assemble(tokens)
                 checker.check(program)
+                program = optimize(program)
                 result = executor.execute(program)
             except LanguageError as error:
                 write_output(f"Error: {error}")
@@ -453,6 +455,7 @@ def run_game_mode(
         tokens = tokenize(source)
         program = assemble(tokens)
         checker.check(program)
+        program = optimize(program)
         executor.execute(program)
     except LanguageError as error:
         write_output(f"Error: {error}")
@@ -467,6 +470,7 @@ def run_game_mode(
             toks = tokenize(wrapped)
             prog = assemble(toks)
             checker.check(prog)
+            prog = optimize(prog)
             result = executor.execute(prog)
         except LanguageError as error:
             checker.restore(saved)
