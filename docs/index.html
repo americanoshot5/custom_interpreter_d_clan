@@ -72,19 +72,19 @@
           <div class="intro-points" aria-label="S-expression introduction">
             <article>
               <strong>S-expression이란?</strong>
-              <p>괄호로 감싼 리스트 구조로 코드와 데이터를 표현하는 표기법이다. Lisp 계열 언어에서 대표적으로 사용된다.</p>
+              <p>괄호로 감싼 리스트 구조로 코드와 데이터를 표현하는 표기법.<br />Lisp 계열 언어에서 대표적으로 사용됨.</p>
             </article>
             <article>
               <strong>Lisp 계열의 철학</strong>
-              <p>프로그램 자체도 리스트 데이터처럼 다룰 수 있다는 점이 핵심이다. 이 철학 덕분에 함수형 사고, 재귀, 메타프로그래밍, 언어 확장이 자연스럽게 이어진다.</p>
+              <p>프로그램 자체도 리스트 데이터처럼 다룰 수 있다는 점이 핵심.<br />함수형 사고, 재귀, 메타프로그래밍, 언어 확장이 자연스럽게 이어짐.</p>
             </article>
             <article>
               <strong>왜 이런 문법이 생겼나?</strong>
-              <p>1950년대 후반 John McCarthy가 인공지능 연구에서 기호와 리스트를 다루기 위해 Lisp를 설계하면서 등장했다. 사람이 읽기 쉬운 문법보다, 코드와 데이터를 같은 구조로 다룰 수 있는 단순한 표현력을 우선했다.</p>
+              <p>1950년대 후반 John McCarthy가 인공지능 연구를 위해 Lisp를 설계하며 등장함.<br />코드와 데이터를 같은 구조로 다루는 단순한 표현력을 우선함.</p>
             </article>
             <article>
               <strong>어떤 특징인가?</strong>
-              <p>연산자와 피연산자가 같은 리스트 안에 놓여 문법 구조가 단순하다. 파싱 결과도 트리 형태로 자연스럽게 이어진다.</p>
+              <p>연산자와 피연산자가 같은 리스트 안에 놓여 문법 구조가 단순함.<br />파싱 결과도 트리 형태로 자연스럽게 이어짐.</p>
             </article>
           </div>
         </div>
@@ -112,8 +112,8 @@
           <p class="eyebrow">Team Decision</p>
           <h2>언어 수정사항</h2>
           <p>
-            S-expression은 모든 표현을 소괄호로 감싸주어야 한다.
-            우리는 REPL에서 더 자연스럽게 코드를 입력하도록, 바깥쪽 global 소괄호를 제거하기로 했다.
+            S-expression은 모든 표현을 소괄호로 감싸주어야 함.<br />
+            REPL 입력을 더 자연스럽게 만들기 위해 바깥쪽 global 소괄호를 제거함.
           </p>
         </div>
         <div class="comparison">
@@ -136,7 +136,7 @@ print total</code></pre>
         <div class="section-heading">
           <p class="eyebrow">Feature Demo</p>
           <h2>기능 구현 소개</h2>
-          <p>데모 파일 1~4번을 실행하면 기초 문법, 함수, 클래스/모듈, 디버그 기능이 순서대로 검증된다.</p>
+          <p>데모 파일 1~4번으로 주요 기능을 검증함.<br />기초 문법, 함수, 클래스/모듈, 디버그 기능을 순서대로 확인함.</p>
         </div>
         <div class="demo-pairs" aria-label="demo input and output pairs">
           <article>
@@ -160,6 +160,7 @@ print total</code></pre>
   (set! total (+ total i)))
 (print total)
 
+(print "블록 스코프 확인 (바깥 x는 영향받지 않음):")
 (var x 100)
 {
   (var x 999)
@@ -169,6 +170,7 @@ print total</code></pre>
 (print "블록 바깥 x:")
 (print x)
 
+(print "배열: 점수 5개의 평균")
 (var scores [5])
 (set-index! scores 0 90)
 (set-index! scores 1 85)
@@ -202,23 +204,27 @@ print total</code></pre>
             <div class="io-pair">
               <pre><code>(func add (a b)
   (return (+ a b)))
+(print "3 + 4 =")
 (print (add 3 4))
 
 (func factorial (n)
   (if (= n 0)
     (return 1)
     (return (* n (factorial (- n 1))))))
+(print "팩토리얼 (재귀): 5! =")
 (print (factorial 5))
 
 (func fib (n)
   (if (&lt; n 2)
     (return n)
     (return (+ (fib (- n 1)) (fib (- n 2))))))
+(print "피보나치 (재귀): fib(10) =")
 (print (fib 10))
 
 (var base 10)
 (func addBase (x)
   (return (+ base x)))
+(print "클로저: 정의 시점의 base=10을 기억하는 함수")
 (print (addBase 5))</code></pre>
               <pre><code>3 + 4 =
 7.0
@@ -266,11 +272,14 @@ demo/demo3_classes_and_modules.cf
 (var d (Dog "Rex"))
 (d.describe)
 
+(print "instanceof 확인:")
 (print (instanceof d Dog))
 (print (instanceof d Animal))
 
 (import "demo/demo3_module_utils.cf" alias util)
+(print "5의 제곱:")
 (print (util.square 5))
+(print "3의 세제곱:")
 (print (util.cube 3))</code></pre>
               <pre><code>Rex
 ... Woof!
@@ -335,8 +344,8 @@ True
           <p class="eyebrow">Best Practices</p>
           <h2>Best Practices</h2>
           <p>
-            기능을 완성하는 것만큼 중요했던 것은, 새 코드가 들어와도 이전
-            기능을 믿을 수 있고 문제를 빠르게 발견할 수 있는 협업 구조였다.
+            기능 완성만큼 중요했던 것은 협업 구조.<br />
+            새 코드가 들어와도 이전 기능을 믿을 수 있고, 문제를 빠르게 발견할 수 있어야 함.
           </p>
         </div>
 
@@ -344,35 +353,35 @@ True
           <article class="practice-item">
             <h3>1. 패턴 적용 범위와 리팩토링 의사결정</h3>
             <p>
-              모든 패턴을 같은 깊이로 적용하지 않고, 문제의 범위에 맞는 구조를 선택했다.
-              적용한 패턴과 의도적으로 보류한 패턴을 함께 정리해 리팩토링 판단 기준을 남겼다.
+              모든 패턴을 같은 깊이로 적용하지 않음.<br />
+              문제의 범위에 맞는 구조를 선택하고, 보류한 패턴까지 판단 기준으로 남김.
             </p>
 
             <div class="pattern-scope-grid">
               <article>
                 <strong>Pipeline</strong>
                 <span>프로젝트 최상위 흐름</span>
-                <p>Tokenizer → Assembler → Checker → Executor 단계로 책임을 분리했다.</p>
+                <p>Tokenizer → Assembler → Checker → Executor 단계로 책임을 분리함.</p>
               </article>
               <article>
                 <strong>Interpreter</strong>
                 <span>AST 실행 모델</span>
-                <p>Stmt와 Expr를 실행 단위로 삼아 언어 문법을 런타임 동작으로 연결했다.</p>
+                <p>Stmt와 Expr를 실행 단위로 삼아 언어 문법을 런타임 동작으로 연결함.</p>
               </article>
               <article>
                 <strong>Dispatch</strong>
                 <span>문법 확장 지점</span>
-                <p>Checker와 Executor 안의 타입별 분기를 테이블로 모아 변경 범위를 제한했다.</p>
+                <p>Checker와 Executor 안의 타입별 분기를 테이블로 모아 변경 범위를 제한함.</p>
               </article>
               <article>
                 <strong>Command</strong>
                 <span>Debug Shell 명령</span>
-                <p>debug 명령을 Command 객체로 분리해 명령 추가와 수정 범위를 줄였다.</p>
+                <p>debug 명령을 Command 객체로 분리해 명령 추가와 수정 범위를 줄임.</p>
               </article>
               <article class="pattern-decision">
                 <strong>Visitor</strong>
                 <span>검토 후 미적용</span>
-                <p>AST 전체에 accept/visit 구조를 넣는 비용 대비 효과가 작아 보류했다.</p>
+                <p>AST 전체에 accept/visit 구조를 넣는 비용 대비 효과가 작아 보류함.</p>
               </article>
             </div>
 
@@ -402,7 +411,7 @@ Program([
 executor.execute(program)</code></pre>
                   </div>
                 </div>
-                <p class="change-impact">효과: 문법 구조를 AST로 고정하고, Checker/Executor가 같은 구조를 각자 목적에 맞게 해석할 수 있었다.</p>
+                <p class="change-impact">효과: 문법 구조를 AST로 고정함.<br />Checker/Executor가 같은 구조를 각자 목적에 맞게 해석함.</p>
               </article>
               <article>
                 <h4>Dispatch: 변경 영향도 축소</h4>
@@ -432,7 +441,7 @@ def _execute_whilestmt(stmt):
     ...</code></pre>
                   </div>
                 </div>
-                <p class="change-impact">효과: 새 Stmt 추가 시 분기 함수 전체를 건드리는 대신, 모듈별 dispatch table 1줄과 전용 메서드로 변경 지점을 좁혔다.</p>
+                <p class="change-impact">효과: 새 Stmt 추가 시 분기 함수 전체를 건드리지 않음.<br />dispatch table 1줄과 전용 메서드로 변경 지점을 좁힘.</p>
               </article>
               <article>
                 <h4>Command: debug 명령 분리</h4>
@@ -460,27 +469,27 @@ if text == "restart":
     return RestartDebugCommand()</code></pre>
                   </div>
                 </div>
-                <p class="change-impact">효과: 신규 명령은 자기 Command 클래스에 동작을 작성하고, 생성 담당 parser에 한 줄 등록하면 된다.</p>
+                <p class="change-impact">효과: 신규 명령은 자기 Command 클래스에 동작만 작성함.<br />생성 담당 parser에는 한 줄만 등록하면 됨.</p>
               </article>
             </div>
-            <p class="impact">효과: 패턴을 많이 넣는 것보다, 변경이 자주 일어나는 지점에만 적용해 가독성과 확장성을 높였다.</p>
+            <p class="impact">효과: 패턴을 많이 넣는 것보다 적용 지점을 좁힘.<br />변경이 자주 일어나는 지점에만 적용해 가독성과 확장성을 높임.</p>
           </article>
 
           <article class="practice-item">
             <h3>2. GitHub Actions로 회귀 테스트 강제</h3>
             <p>
-              기능 개발이 끝날 때마다 해당 테스트를 회귀 테스트 목록에 넣고,
-              PR에서 pytest가 100% 통과하지 않으면 merge할 수 없도록 했다.
+              기능 개발이 끝날 때마다 해당 테스트를 회귀 테스트 목록에 추가함.<br />
+              PR에서 pytest가 100% 통과하지 않으면 merge할 수 없도록 강제함.
             </p>
-            <p class="impact">효과: 신규 기능이 기존 기능을 깨뜨리는지 자동으로 확인했고, 리뷰어가 수동으로 전체 시나리오를 다시 실행하지 않아도 안정성을 판단할 수 있었다.</p>
+            <p class="impact">효과: 신규 기능이 기존 기능을 깨뜨리는지 자동 확인함.<br />리뷰어가 전체 시나리오를 수동 실행하지 않아도 안정성을 판단할 수 있었음.</p>
             <div class="evidence-strip" aria-label="GitHub Actions regression test evidence">
               <figure>
                 <img src="assets/github-actions-runs.png" alt="GitHub Actions workflow runs passed for recent pull requests">
                 <figcaption>PR마다 자동 실행된 tests workflow</figcaption>
               </figure>
               <figure>
-                <img src="assets/github-actions-pytest.png" alt="GitHub Actions pytest job succeeded and collected 600 tests">
-                <figcaption>pytest job에서 600개 테스트 수집</figcaption>
+                <img src="assets/github-actions-pytest.png" alt="GitHub Actions pytest job succeeded and collected 602 tests">
+                <figcaption>pytest job에서 602개 테스트 수집</figcaption>
               </figure>
             </div>
           </article>
@@ -488,20 +497,20 @@ if text == "restart":
           <article class="practice-item">
             <h3>3. 기능 완성 후 사용자 관점 테스트</h3>
             <p>
-              구현이 끝난 뒤 실제 사용 흐름으로 입력해보며 내부 테스트만으로는
-              드러나기 어려운 버그를 찾아냈다.
+              구현 완료 후 실제 사용 흐름으로 입력해봄.<br />
+              내부 테스트만으로 드러나기 어려운 버그를 찾아냄.
             </p>
             <div class="bug-case-grid">
               <article class="bug-case">
                 <h4>선언 실패 후 재선언 오류</h4>
-                <p>문법 오류로 실패한 선언이 환경에 남아, 올바른 재선언까지 중복 변수로 처리되던 문제를 발견했다.</p>
+                <p>문법 오류로 실패한 선언이 환경에 남음.<br />이후 올바른 재선언까지 중복 변수로 처리되던 문제를 발견함.</p>
                 <pre><code>(var y (10 + 1))  ; 실패
 (var y (+ 10 1))  ; y가 이미 정의됨</code></pre>
                 <a href="https://github.com/americanoshot5/custom_interpreter_d_clan/pull/39" target="_blank" rel="noreferrer">PR #39</a>
               </article>
               <article class="bug-case">
                 <h4>함수 정의 결과가 자동 출력</h4>
-                <p>REPL에서 함수 정의만 했는데 함수명이 결과처럼 출력되어, 실행 결과와 선언 결과가 섞여 보이던 문제를 수정했다.</p>
+                <p>REPL에서 함수 정의만 해도 함수명이 결과처럼 출력됨.<br />실행 결과와 선언 결과가 섞여 보이던 문제를 수정함.</p>
                 <pre><code>&gt;&gt;&gt; func xx (n) (print n)
 xx  ; 기존: 함수명이 자동 출력됨
 &gt;&gt;&gt; xx 20
@@ -510,7 +519,7 @@ xx  ; 기존: 함수명이 자동 출력됨
               </article>
               <article class="bug-case">
                 <h4>void 함수 조건식과 null 지원</h4>
-                <p>값을 반환하지 않는 함수를 if 조건에 넣어보며, null 값이 언어 차원에서 충분히 처리되지 않는 문제를 확인했다.</p>
+                <p>값을 반환하지 않는 함수를 if 조건에 넣어봄.<br />null 값이 언어 차원에서 충분히 처리되지 않는 문제를 확인함.</p>
                 <pre><code>(func logOnly ()
   (print "check"))
 (if (logOnly)
@@ -519,7 +528,7 @@ xx  ; 기존: 함수명이 자동 출력됨
                 <a href="https://github.com/americanoshot5/custom_interpreter_d_clan/pull/42" target="_blank" rel="noreferrer">PR #42</a>
               </article>
             </div>
-            <p class="impact">사용자 테스트는 “실제로 쓰기 편한지”를 확인해주는 마지막 안전망이 되었다.</p>
+            <p class="impact">사용자 테스트는 마지막 안전망.<br />“실제로 쓰기 편한지”를 확인해주는 역할을 함.</p>
           </article>
         </div>
       </section>
@@ -529,9 +538,9 @@ xx  ; 기존: 함수명이 자동 출력됨
           <p class="eyebrow">Test Driven Collaboration</p>
           <h2>테스트 분포</h2>
           <p>
-            기능이 늘어나고 내부 구조가 바뀌어도, 테스트가 이전 동작을 계속
-            확인해주었다. 덕분에 새 기능을 붙이거나 리팩토링할 때 무엇이
-            깨졌는지 빠르게 알 수 있었고, 개발 속도와 안정성을 함께 얻을 수 있었다.
+            기능이 늘어나고 내부 구조가 바뀌어도 테스트가 이전 동작을 확인해줌.<br />
+            새 기능을 붙이거나 리팩토링할 때 무엇이 깨졌는지 빠르게 알 수 있었음.<br />
+            개발 속도와 안정성을 함께 얻을 수 있었음.
           </p>
           <ul class="plain-list">
             <li>기능별 테스트로 기대 동작을 먼저 고정</li>
@@ -561,11 +570,15 @@ xx  ; 기존: 함수명이 자동 출력됨
           <div class="quality-grid">
             <article>
               <strong>GitHub Actions</strong>
-              <p>기능 개발이 끝난 테스트는 바로 CI의 pytest 목록에 넣어 회귀 테스트로 고정했다.</p>
+              <p>기능 개발이 끝난 테스트는 바로 CI에 추가함.<br />pytest 목록에 넣어 회귀 테스트로 고정함.</p>
             </article>
             <article>
-              <strong>Coverage 95%+</strong>
-              <p>마지막에는 코드 커버리지까지 측정해 테스트 품질을 확인했고, 95% 이상으로 평가했다.</p>
+              <strong>Line Coverage 95%</strong>
+              <p>602개 테스트 실행 기준 TOTAL 95%를 기록함.<br />src 전체 실행 가능 코드 라인 1,853개 중 98개만 미커버로 남음.</p>
+              <ul class="coverage-list">
+                <li><span>Assembler / Checker / Executor</span><strong>96% / 99% / 97%</strong></li>
+                <li><span>Optimizer / Prompt Shell</span><strong>95% / 96%</strong></li>
+              </ul>
             </article>
           </div>
         </div>
@@ -600,5 +613,21 @@ xx  ; 기존: 함수명이 자동 출력됨
         </div>
       </section>
     </main>
+    <script>
+      document.querySelectorAll(".io-pair").forEach((pair) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "io-expand-toggle";
+        button.textContent = "전체 보기";
+        button.addEventListener("click", () => {
+          const expanded = pair.classList.toggle("is-expanded");
+          pair.querySelectorAll("pre").forEach((pre) => {
+            pre.classList.toggle("is-expanded", expanded);
+          });
+          button.textContent = expanded ? "접기" : "전체 보기";
+        });
+        pair.parentNode.insertBefore(button, pair);
+      });
+    </script>
   </body>
 </html>

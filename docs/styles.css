@@ -454,6 +454,10 @@ code {
   border-radius: 8px;
 }
 
+.io-pair pre.is-expanded {
+  max-height: none;
+}
+
 .io-pair pre::before {
   position: sticky;
   top: 0;
@@ -478,6 +482,25 @@ code {
   content: "stdout 출력";
   background: #ffe1d8;
   color: #9a3b27;
+}
+
+.io-expand-toggle {
+  display: block;
+  width: fit-content;
+  margin: 0 0 8px auto;
+  padding: 5px 10px;
+  color: var(--ink);
+  background: #edf1ef;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.io-expand-toggle:hover {
+  background: #dceee7;
 }
 
 .refactor-grid {
@@ -861,6 +884,31 @@ code {
 .quality-grid p {
   margin-bottom: 0;
   font-size: 15px;
+}
+
+.coverage-list {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.coverage-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.coverage-list strong {
+  margin-bottom: 0;
+  color: var(--ink);
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .lesson-grid {
