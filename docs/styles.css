@@ -192,6 +192,13 @@ h3 {
   font-size: 17px;
 }
 
+.term-note {
+  margin-left: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .intro-points p {
   margin-bottom: 0;
   color: var(--muted);

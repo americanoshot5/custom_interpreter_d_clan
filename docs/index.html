@@ -71,11 +71,11 @@
           <h1>S-expression 인터프리터</h1>
           <div class="intro-points" aria-label="S-expression introduction">
             <article>
-              <strong>S-expression이란?</strong>
+              <strong>S-expression이란? <span class="term-note">Symbolic Expression</span></strong>
               <p>괄호로 감싼 리스트 구조로 코드와 데이터를 표현하는 표기법.<br />Lisp 계열 언어에서 대표적으로 사용됨.</p>
             </article>
             <article>
-              <strong>Lisp 계열의 철학</strong>
+              <strong>Lisp 계열의 철학 <span class="term-note">LISt Processing</span></strong>
               <p>프로그램 자체도 리스트 데이터처럼 다룰 수 있다는 점이 핵심.<br />함수형 사고, 재귀, 메타프로그래밍, 언어 확장이 자연스럽게 이어짐.</p>
             </article>
             <article>
@@ -113,7 +113,7 @@
           <h2>언어 수정사항</h2>
           <p>
             S-expression은 모든 표현을 소괄호로 감싸주어야 함.<br />
-            REPL 입력을 더 자연스럽게 만들기 위해 바깥쪽 global 소괄호를 제거함.
+            REPL 입력을 더 자연스럽게 만들기 위해 최상위 global 소괄호를 제거함.
           </p>
         </div>
         <div class="comparison">
@@ -224,7 +224,7 @@ print total</code></pre>
 (var base 10)
 (func addBase (x)
   (return (+ base x)))
-(print "클로저: 정의 시점의 base=10을 기억하는 함수")
+(print "클로저: 정의 시점의 외부 환경을 참조하는 함수")
 (print (addBase 5))</code></pre>
               <pre><code>3 + 4 =
 7.0
@@ -235,7 +235,7 @@ print total</code></pre>
 피보나치 (재귀): fib(10) =
 55.0
 
-클로저: 정의 시점의 base=10을 기억하는 함수
+클로저: 정의 시점의 외부 환경을 참조하는 함수
 15.0</code></pre>
             </div>
           </article>
@@ -397,7 +397,8 @@ run_line("(var x 1)")
 if tokens[0] == "var":
     env[name] = eval(value)
 elif tokens[0] == "print":
-    print(eval(expr))</code></pre>
+    print(eval(expr))
+    ...</code></pre>
                   </div>
                   <div>
                     <strong>After</strong>
