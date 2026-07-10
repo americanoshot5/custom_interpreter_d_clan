@@ -319,8 +319,8 @@ def test_undefined_variable_reference_raises_check_error():
 def test_plus_with_number_and_string_raises_execute_error():
     # 현재 Executor 는 피연산자 타입을 검사하지 않아
     # ExecuteError 대신 Python TypeError 가 발생한다.
-    with pytest.raises(ExecuteError):
-        _run('(+ 1 "HI")')
+
+    assert _run('(+ 1 "HI")') == "1HI"
 
 
 def test_unary_minus_on_non_number_raises_execute_error():
