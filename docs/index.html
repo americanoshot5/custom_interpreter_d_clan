@@ -113,7 +113,7 @@
           <h2>언어 수정사항</h2>
           <p>
             S-expression은 모든 표현을 소괄호로 감싸주어야 함.<br />
-            REPL 입력을 더 자연스럽게 만들기 위해 바깥쪽 global 소괄호를 제거함.
+            REPL 입력을 더 자연스럽게 만들기 위해 최상위 global 소괄호를 제거함.
           </p>
         </div>
         <div class="comparison">
@@ -224,7 +224,7 @@ print total</code></pre>
 (var base 10)
 (func addBase (x)
   (return (+ base x)))
-(print "클로저: 정의 시점의 base=10을 기억하는 함수")
+(print "클로저: 정의 시점의 외부 환경을 참조하는 함수")
 (print (addBase 5))</code></pre>
               <pre><code>3 + 4 =
 7.0
@@ -235,7 +235,7 @@ print total</code></pre>
 피보나치 (재귀): fib(10) =
 55.0
 
-클로저: 정의 시점의 base=10을 기억하는 함수
+클로저: 정의 시점의 외부 환경을 참조하는 함수
 15.0</code></pre>
             </div>
           </article>
@@ -398,7 +398,7 @@ if tokens[0] == "var":
     env[name] = eval(value)
 elif tokens[0] == "print":
     print(eval(expr))
-    ...           </code></pre>
+    ...</code></pre>
                   </div>
                   <div>
                     <strong>After</strong>
