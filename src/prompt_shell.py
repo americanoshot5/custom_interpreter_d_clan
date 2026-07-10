@@ -6,6 +6,7 @@ from Assembler import assemble
 from Checker import StaticChecker
 from common import LanguageError, Program, RuntimeValue, Token, TokenType
 from Executor import SExpressionExecutor
+from Optimizer import optimize
 from Tokenizer import tokenize
 
 # var/set!/print/if/for/func/return/class/import 처럼 "(키워드 ...)" 형태로
@@ -83,6 +84,7 @@ def run_shell(
     continuation_prompt: str = "... ",
     checkpoint: Callable[[], object] | None = None,
     restore: Callable[[object], None] | None = None,
+    optimize: Callable[[Program], Program] | None = None,
 ) -> None:
     buffer: list[str] = []
 
@@ -107,6 +109,8 @@ def run_shell(
                 tokens = tokenize(text)
                 program = assemble(tokens)
                 check(program)
+                if optimize is not None:
+                    program = optimize(program)
                 result = execute(program)
             except LanguageError as error:
                 if saved is not None and restore is not None:
@@ -134,6 +138,7 @@ def main() -> None:
         execute=executor.execute,
         checkpoint=checker.checkpoint,
         restore=checker.restore,
+        optimize=optimize,
     )
 
 

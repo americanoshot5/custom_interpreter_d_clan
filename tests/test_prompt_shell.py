@@ -251,6 +251,7 @@ def test_main_wires_run_shell_with_real_pipeline_functions(mocker):
     from Assembler import assemble
     from Checker import StaticChecker
     from Executor import SExpressionExecutor
+    from Optimizer import optimize
     from Tokenizer import tokenize
 
     fake_run_shell = mocker.patch.object(prompt_shell, "run_shell")
@@ -265,3 +266,47 @@ def test_main_wires_run_shell_with_real_pipeline_functions(mocker):
     assert captured["check"].__func__ is StaticChecker.check
     assert captured["execute"].__self__.__class__ is SExpressionExecutor
     assert captured["execute"].__func__ is SExpressionExecutor.execute
+    assert captured["optimize"] is optimize
+
+
+def test_run_shell_applies_optimize_before_execute():
+    from Assembler import assemble
+    from Checker import StaticChecker
+    from Executor import SExpressionExecutor
+    from Optimizer import optimize
+    from Tokenizer import tokenize
+
+    outputs = []
+    checker = StaticChecker()
+    executor = SExpressionExecutor()
+    run_shell(
+        read_line=_scripted_read_line(["(+ 1 (* 2 3))", "", "exit"]),
+        write_output=outputs.append,
+        tokenize=tokenize,
+        assemble=assemble,
+        check=checker.check,
+        execute=executor.execute,
+        optimize=optimize,
+    )
+    assert outputs == ["7.0"]
+
+
+def test_run_shell_without_optimize_still_works():
+    """optimize 인자를 안 줘도(기존 호출부 호환) 정상 동작해야 한다."""
+    from Assembler import assemble
+    from Checker import StaticChecker
+    from Executor import SExpressionExecutor
+    from Tokenizer import tokenize
+
+    outputs = []
+    checker = StaticChecker()
+    executor = SExpressionExecutor()
+    run_shell(
+        read_line=_scripted_read_line(["(+ 1 (* 2 3))", "", "exit"]),
+        write_output=outputs.append,
+        tokenize=tokenize,
+        assemble=assemble,
+        check=checker.check,
+        execute=executor.execute,
+    )
+    assert outputs == ["7.0"]
